@@ -1,3 +1,4 @@
+using Spectre.Console.Rendering;
 using Spectre.Console.Rendering.Prompts;
 
 namespace Spectre.Console;
@@ -105,6 +106,29 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
     internal DefaultPromptValue<T>? DefaultValue { get; set; }
 
     /// <summary>
+    /// Gets the current input state (used by rendering hooks).
+    /// </summary>
+    /// <remarks>
+    /// This is used internally by render hooks to display the current input state.
+    /// In blocking/static mode (Show/ShowAsync), this remains empty and is not used.
+    /// In renderable mode (ShowAsRenderableAsync), this tracks user input.
+    /// </remarks>
+    public string GetInputState() => _currentInput;
+
+    /// <summary>
+    /// Sets the current input state (used by rendering hooks).
+    /// </summary>
+    /// <param name="input">The input to set.</param>
+    /// <remarks>
+    /// This is used internally by render hooks and input handlers.
+    /// External code should not call this directly.
+    /// </remarks>
+    public void SetInputState(string input)
+    {
+        _currentInput = input ?? string.Empty;
+    }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="TextPrompt{T}"/> class.
     /// </summary>
     /// <param name="prompt">The prompt markup text.</param>
@@ -193,7 +217,9 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
     {
         var promptStyle = PromptStyle ?? Style.Plain;
         var displayText = IsSecret ? _currentInput.Mask(Mask) : _currentInput;
-        return new Text(displayText, promptStyle);
+        // Add cursor visualization when in renderable mode (shows _ when empty)
+        var text = new Text(displayText + (string.IsNullOrEmpty(_currentInput) ? "_" : ""), promptStyle);
+        return text;
     }
 
     /// <summary>
@@ -290,6 +316,169 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
                 return result;
             }
         }).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Shows the prompt as a renderable with live input updates via a render hook.
+    /// </summary>
+    /// <param name="console">The console to show the prompt in.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The user input converted to the expected type.</returns>
+    /// <remarks>
+    /// This method integrates the prompt into the render pipeline using a hook.
+    /// The prompt can be rendered as part of a layout while capturing input interactively.
+    /// Uses key-by-key input handling for true live rendering updates.
+    /// This differs from Show/ShowAsync which blocks and handle I/O directly.
+    /// </remarks>
+    public async Task<T> ShowAsRenderableAsync(IAnsiConsole console, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(console);
+
+        return await console.RunExclusive(async () =>
+        {
+            // Reset input state for this session
+            _currentInput = DefaultInput && DefaultValue != null ? 
+                (Converter ?? TypeConverterHelper.ConvertToString)(DefaultValue.Value) : 
+                string.Empty;
+
+            var promptStyle = PromptStyle ?? Style.Plain;
+            var converter = Converter ?? TypeConverterHelper.ConvertToString;
+            var choices = Choices.Select(choice => converter(choice)).ToList();
+            var choiceMap = Choices.ToDictionary(choice => converter(choice), choice => choice, _comparer);
+
+            // Create and register the render hook for live updates
+            var hook = new TextPromptRenderHook<T>(console, () => this);
+            using (new RenderHookScope(console, hook))
+            {
+                // Initial render
+                hook.Refresh();
+
+                while (true)
+                {
+                    // Capture input key-by-key for live rendering
+                    var input = await ReadInputAsync(console, choices, cancellationToken).ConfigureAwait(false);
+
+                    // Nothing entered?
+                    if (string.IsNullOrWhiteSpace(input))
+                    {
+                        if (DefaultValue != null)
+                        {
+                            return DefaultValue.Value;
+                        }
+
+                        if (!AllowEmpty)
+                        {
+                            _currentInput = string.Empty;
+                            hook.Refresh();
+                            continue;
+                        }
+                    }
+
+                    T? result;
+                    if (Choices.Count > 0)
+                    {
+                        if (choiceMap.TryGetValue(input, out result) && result != null)
+                        {
+                            return result;
+                        }
+                        else
+                        {
+                            console.MarkupLine(InvalidChoiceMessage);
+                            _currentInput = string.Empty;  // Reset for new attempt
+                            hook.Refresh();
+                            continue;
+                        }
+                    }
+                    else if (!TypeConverterHelper.TryConvertFromStringWithCulture<T>(input, Culture, out result) || result == null)
+                    {
+                        console.MarkupLine(ValidationErrorMessage);
+                        _currentInput = string.Empty;  // Reset for new attempt
+                        hook.Refresh();
+                        continue;
+                    }
+
+                    // Run all validators
+                    if (!ValidateResult(result, out var validationMessage))
+                    {
+                        console.MarkupLine(validationMessage);
+                        _currentInput = string.Empty;  // Reset for new attempt
+                        hook.Refresh();
+                        continue;
+                    }
+
+                    return result;
+                }
+            }
+        }).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads input key-by-key with live rendering updates via the hook.
+    /// This method captures individual keystrokes and updates the prompt display in real-time.
+    /// </summary>
+    private async Task<string> ReadInputAsync(IAnsiConsole console, List<string> choices, CancellationToken cancellationToken)
+    {
+        if (!console.Profile.Capabilities.Interactive)
+        {
+            // Fallback to non-interactive mode
+            return string.Empty;
+        }
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            if (console.Input.IsKeyAvailable())
+            {
+                var keyInfo = console.Input.ReadKey(intercept: true);
+                if (!keyInfo.HasValue)
+                {
+                    continue;
+                }
+
+                var key = keyInfo.Value;
+
+                if (key.Key == ConsoleKey.Enter)
+                {
+                    // Submit the current input
+                    console.WriteLine();
+                    return _currentInput;
+                }
+
+                if (key.Key == ConsoleKey.Backspace)
+                {
+                    if (_currentInput.Length > 0)
+                    {
+                        _currentInput = _currentInput[..^1];
+                    }
+                }
+                else if (key.Key == ConsoleKey.Tab)
+                {
+                    // Handle autocomplete with choices
+                    if (choices.Count > 0)
+                    {
+                        var replacement = AutoComplete(choices, _currentInput);
+                        if (!string.IsNullOrEmpty(replacement))
+                        {
+                            _currentInput = replacement;
+                        }
+                    }
+                }
+                else if (!char.IsControl(key.KeyChar))
+                {
+                    // Add regular character to input
+                    _currentInput += key.KeyChar;
+                }
+
+                // Trigger re-render by writing an empty renderable (goes through pipeline -> hook processes)
+                console.Write(new Text(string.Empty));
+            }
+            else
+            {
+                // Small delay to prevent busy-waiting
+                await Task.Delay(10, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        return _currentInput;
     }
 
     /// <summary>
@@ -452,19 +641,5 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
         }
 
         return string.Empty;
-    }
-
-    /// <summary>
-    /// Builds the renderable for the input field (called by RenderHook).
-    /// This is separate from Render() to keep the hook focused.
-    /// </summary>
-    private IRenderable BuildInputRenderable()
-    {
-        var promptStyle = PromptStyle ?? Style.Plain;
-        var displayText = IsSecret ? _currentInput.Mask(Mask) : _currentInput;
-
-        // Add a cursor indicator if desired
-        var text = new Text(displayText + "_", promptStyle);
-        return text;
     }
 }
