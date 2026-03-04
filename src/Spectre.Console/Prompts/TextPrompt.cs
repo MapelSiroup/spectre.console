@@ -1,13 +1,17 @@
+using Spectre.Console.Rendering.Prompts;
+
 namespace Spectre.Console;
 
 /// <summary>
 /// Represents a prompt.
 /// </summary>
 /// <typeparam name="T">The prompt result type.</typeparam>
-public sealed class TextPrompt<T> : IPrompt<T>, IHasCulture
+public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
 {
     private readonly string _prompt;
     private readonly StringComparer? _comparer;
+    // State: holds the current input being edited
+    private string _currentInput = string.Empty;
 
     /// <summary>
     /// Gets or sets the prompt style.
@@ -112,6 +116,87 @@ public sealed class TextPrompt<T> : IPrompt<T>, IHasCulture
     }
 
     /// <summary>
+    /// Measures the renderable width requirements.
+    /// </summary>
+    public Measurement Measure(RenderOptions options, int maxWidth)
+    {
+        // Minimal renderable width: prompt + input field
+        // This is a conservative estimate; actual width depends on prompt text
+        var promptWidth = _prompt.Length + 1;  // +1 for space after prompt
+        return new Measurement(Math.Min(10, maxWidth), maxWidth);
+    }
+
+    /// <summary>
+    /// Renders the prompt UI: prompt text + current input field.
+    /// </summary>
+    public IEnumerable<Segment> Render(RenderOptions options, int maxWidth)
+    {
+        var segments = new List<Segment>();
+
+        // Build the prompt prefix (text + choices + default)
+        var promptText = BuildPromptText();
+        segments.AddRange(((IRenderable)new Markup(promptText)).Render(options, maxWidth));
+
+        // Build and render the input field
+        var inputRenderable = BuildInputField();
+        segments.AddRange(inputRenderable.Render(options, maxWidth));
+
+        return segments;
+    }
+
+    /// <summary>
+    /// Builds the prompt prefix text (includes choices, default value, etc.).
+    /// </summary>
+    private string BuildPromptText()
+    {
+        var builder = new StringBuilder();
+        builder.Append(_prompt.TrimEnd());
+
+        var appendSuffix = false;
+
+        if (ShowChoices && Choices.Count > 0)
+        {
+            appendSuffix = true;
+            var converter = Converter ?? TypeConverterHelper.ConvertToString;
+            var choices = string.Join("/", Choices.Select(choice => converter(choice)));
+            var choicesStyle = ChoicesStyle?.ToMarkup() ?? "blue";
+            builder.AppendFormat(CultureInfo.InvariantCulture, " [{0}][[{1}]][/]", choicesStyle, choices);
+        }
+
+        if (ShowDefaultValue && DefaultValue != null)
+        {
+            appendSuffix = true;
+            var converter = Converter ?? TypeConverterHelper.ConvertToString;
+            var defaultValueStyle = DefaultValueStyle?.ToMarkup() ?? "green";
+            var defaultValue = converter(DefaultValue.Value);
+
+            builder.AppendFormat(
+                CultureInfo.InvariantCulture,
+                " [{0}]({1})[/]",
+                defaultValueStyle,
+                IsSecret ? defaultValue.Mask(Mask) : defaultValue);
+        }
+
+        var markup = builder.ToString().Trim();
+        if (appendSuffix)
+        {
+            markup += ":";
+        }
+
+        return markup + " ";
+    }
+
+    /// <summary>
+    /// Builds the input field renderable (the editable text area).
+    /// </summary>
+    private IRenderable BuildInputField()
+    {
+        var promptStyle = PromptStyle ?? Style.Plain;
+        var displayText = IsSecret ? _currentInput.Mask(Mask) : _currentInput;
+        return new Text(displayText, promptStyle);
+    }
+
+    /// <summary>
     /// Shows the prompt and requests input from the user.
     /// </summary>
     /// <param name="console">The console to show the prompt in.</param>
@@ -122,7 +207,7 @@ public sealed class TextPrompt<T> : IPrompt<T>, IHasCulture
         return ShowAsync(console, CancellationToken.None).GetAwaiter().GetResult();
     }
 
-    /// <inheritdoc/>
+     /// <inheritdoc/>
     public async Task<T> ShowAsync(IAnsiConsole console, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(console);
@@ -291,5 +376,95 @@ public sealed class TextPrompt<T> : IPrompt<T>, IHasCulture
 
         message = null;
         return true;
+    }
+
+    /// <summary>
+    /// Processes a single key input and updates state.
+    /// Returns true if the user pressed Enter (submit), false otherwise.
+    /// </summary>
+    private bool HandleInputKey(ConsoleKeyInfo key)
+    {
+        if (key.Key == ConsoleKey.Enter)
+        {
+            return true;  // Submit
+        }
+
+        if (key.Key == ConsoleKey.Backspace)
+        {
+            if (_currentInput.Length > 0)
+            {
+                _currentInput = _currentInput[..^1];
+            }
+            return false;
+        }
+
+        // Handle Tab for autocomplete (if choices available)
+        if (key.Key == ConsoleKey.Tab && Choices.Count > 0)
+        {
+            var converter = Converter ?? TypeConverterHelper.ConvertToString;
+            var choiceStrings = Choices.Select(c => converter(c)).ToList();
+            var replacement = AutoComplete(choiceStrings, _currentInput);
+            if (!string.IsNullOrEmpty(replacement))
+            {
+                _currentInput = replacement;
+            }
+            return false;
+        }
+
+        // Add regular characters
+        if (!char.IsControl(key.KeyChar))
+        {
+            _currentInput += key.KeyChar;
+            return false;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Autocomplete logic (from original TextPrompt).
+    /// </summary>
+    private string AutoComplete(List<string> choices, string text)
+    {
+        if (choices.Count == 0) return string.Empty;
+
+        // Find exact match
+        var found = choices.Find(i => i == text);
+        if (found != null)
+        {
+            // Cycle to next choice
+            var index = choices.IndexOf(found);
+            index = (index + 1) % choices.Count;
+            return choices[index];
+        }
+
+        // Find prefix match
+        var next = choices.Find(i => i.StartsWith(text, StringComparison.InvariantCultureIgnoreCase));
+        if (next != null)
+        {
+            return next;
+        }
+
+        // Use first if empty
+        if (string.IsNullOrEmpty(text))
+        {
+            return choices[0];
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>
+    /// Builds the renderable for the input field (called by RenderHook).
+    /// This is separate from Render() to keep the hook focused.
+    /// </summary>
+    private IRenderable BuildInputRenderable()
+    {
+        var promptStyle = PromptStyle ?? Style.Plain;
+        var displayText = IsSecret ? _currentInput.Mask(Mask) : _currentInput;
+
+        // Add a cursor indicator if desired
+        var text = new Text(displayText + "_", promptStyle);
+        return text;
     }
 }
