@@ -6,32 +6,32 @@ public static class Program
 {
     public static async Task Main(string[] args)
     {
-        // Check if we can accept key strokes
+        // Check if the console can accept key strokes
         if (!AnsiConsole.Profile.Capabilities.Interactive)
         {
             AnsiConsole.MarkupLine("[red]Environment does not support interaction.[/]");
             return;
         }
 
-        // Confirmation
+        // Confirmation si on veut voir les prompts en exemples.
         if (!AskConfirmation())
         {
             return;
         }
 
-        WriteDivider("Feature 1: Blocking Mode (Original - Backward Compatible)");
+        WriteDivider("Feature 1: Blocking Mode (Original - Backward Compatible)");  //<-- 1ere Issue
         AnsiConsole.MarkupLine("[dim]This demonstrates the original Show() behavior with [cyan]DefaultInput[/] feature.[/]");
         AnsiConsole.WriteLine();
         var sport = AskSport();
         AnsiConsole.MarkupLine($"[green]Selected sport:[/] {sport}");
 
-        WriteDivider("Feature 2: Renderable Mode (Live Interactive)");
+        WriteDivider("Feature 2: Renderable Mode (Live Interactive)");  //<-- tres WIP, permet de mettre les prompts renderable dans un layout
         AnsiConsole.MarkupLine("[dim]This demonstrates the new ShowAsRenderableAsync() with hook-based live updates.[/]");
         AnsiConsole.WriteLine();
         var day = await AskDayAsRenderable();
         AnsiConsole.MarkupLine($"[green]Selected day:[/] {day}");
 
-        // Summary
+        // Sommaire final
         WriteDivider("Results Summary");
         AnsiConsole.Write(new Table()
             .AddColumns("[grey]Feature[/]", "[grey]Result[/]")
@@ -75,7 +75,7 @@ public static class Program
                 .AddChoice("Hockey")
                 .AddChoice("Basketball")
                 .ShowDefaultValue(true)
-                .DefaultInput(true)  // ← Feature 1: Inject default into input buffer
+                .DefaultInput(true)  // Issue 1: Inject default value dans le input buffer
                 .PromptStyle("cyan"));
     }
 
@@ -96,7 +96,7 @@ public static class Program
             .AddChoice("Saturday")
             .AddChoice("Sunday")
             .ShowDefaultValue(true)
-            .DefaultInput(true)  // ← Also supports default input in renderable mode!
+            .DefaultInput(true)  // supporte aussi le default input en renderable mode!
             .PromptStyle("magenta");
 
         // ShowAsRenderableAsync handles:
