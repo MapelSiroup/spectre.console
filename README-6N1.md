@@ -17,10 +17,8 @@ Spectre.Console est une librairie .NET permettant de construire des interfaces e
 	git switch readme-avec-examples
 	```
 	Cette branche contient tous les changements présentés dans ce README ainsi que le fichier de démonstration.
-3. Il peut être nécessaire de lancer une compilation initiale :
-	```powershell
-	dotnet build
-	```
+3. Il se peut bien que vous aurez des "erreurs", si c'est le cas il est nécessaire de lancer une compilation initiale (bouton marteau/build dans IntelliJ) :
+
 	afin de restaurer les paquets et s'assurer que tout est correctement configuré.
 
 # Utilisation et Demo
