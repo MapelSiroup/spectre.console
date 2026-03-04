@@ -5,6 +5,7 @@ Spectre.Console est une librairie .NET permettant de construire des interfaces e
 ## Prérequis
 - Un IDE capable d'exécuter une solution C# (Visual Studio, Rider, VS Code…)
 - Git installé sur votre machine
+- .NET SDK 10 
 
 ## Étapes d'installation
 1. Cloner le dépôt Git dans un dossier local:
@@ -48,8 +49,7 @@ Le fichier de démonstration mentionné ci-dessus illustre comment exploiter cer
 ## Issue #1281 – `Make prompts IRenderable` (pas de PR pour l'instant)
 - **Description** : Refactoriser les classes de prompts pour qu'elles implémentent l'interface `IRenderable`. Cette transformation permettrait de manipuler les prompts comme des éléments graphiques : les insérer dans des mises en page (`Layouts`), les imbriquer dans d'autres `IRenderable`, etc. En pratique, cela les rendrait comparables à des widgets réutilisables.
 - **Complexité** : Cette évolution nécessite une compréhension approfondie du pipeline de rendu de Spectre.Console. Il faut convertir des classes conçues pour un usage séquentiel et interactif en objets passif capables de se rendre "en temps réel" au sein du moteur. Tout en faisant cela, il est impératif de ne pas rompre la compatibilité avec les prompts existants, ce qui est délicat étant donné l'architecture actuelle et les dépendances internes.
-
- (Le travail sur cette issue sera décrit ici lorsqu'une PR sera ouverte.)
+- **Travail réalisé** : Pour l'instant, seul une des classe prompts (TextPrompt.cs) à reçu les changements necessaire pour se rendre renderable, mais une fois celle-ci terminer il sera simple de rendre tout les autres en `IRenderable`. Un des problemes actuel est qu'il brise la rétro-compatibilité lors de la gestion des tests. il faut donc une deuxieme refactorisation de ce code pour qu'ìl en soit compatible.
 
 
 # TODO avant la semaine 13
