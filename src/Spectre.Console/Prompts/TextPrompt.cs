@@ -59,9 +59,20 @@ public sealed class TextPrompt<T> : IPrompt<T>, IHasCulture
     public bool ShowDefaultValue { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets the default value input method. Defaults to true which places the default value in the input buffer.
+    /// </summary>
+    public bool DefaultInput { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether or not an empty result is valid.
     /// </summary>
     public bool AllowEmpty { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the prompt line
+    /// should be cleared after a successful input.
+    /// </summary>
+    public bool ClearOnFinish { get; set; }
 
     /// <summary>
     /// Gets or sets the converter to get the display string for a choice. By default
@@ -127,7 +138,17 @@ public sealed class TextPrompt<T> : IPrompt<T>, IHasCulture
 
             while (true)
             {
-                var input = await console.ReadLine(promptStyle, IsSecret, Mask, choices, cancellationToken).ConfigureAwait(false);
+                string input;
+                if (DefaultInput && DefaultValue != null)
+                {
+                    input = await console.ReadLine(promptStyle, IsSecret, Mask, choices, cancellationToken, converter(DefaultValue.Value)).ConfigureAwait(false);
+                }
+                else
+                {
+                    input = await console.ReadLine(promptStyle, IsSecret, Mask, choices, cancellationToken).ConfigureAwait(false);
+                }
+
+
 
                 // Nothing entered?
                 if (string.IsNullOrWhiteSpace(input))
@@ -137,6 +158,8 @@ public sealed class TextPrompt<T> : IPrompt<T>, IHasCulture
                         var defaultValue = converter(DefaultValue.Value);
                         console.Write(IsSecret ? defaultValue.Mask(Mask) : defaultValue, promptStyle);
                         console.WriteLine();
+
+                        ClearPromptLine(console);
                         return DefaultValue.Value;
                     }
 
@@ -153,6 +176,7 @@ public sealed class TextPrompt<T> : IPrompt<T>, IHasCulture
                 {
                     if (choiceMap.TryGetValue(input, out result) && result != null)
                     {
+                        ClearPromptLine(console);
                         return result;
                     }
                     else
@@ -177,6 +201,7 @@ public sealed class TextPrompt<T> : IPrompt<T>, IHasCulture
                     continue;
                 }
 
+                ClearPromptLine(console);
                 return result;
             }
         }).ConfigureAwait(false);
@@ -224,6 +249,32 @@ public sealed class TextPrompt<T> : IPrompt<T>, IHasCulture
         }
 
         console.Markup(markup + " ");
+    }
+
+    /// <summary>
+    /// Clears the prompt line when enabled.
+    /// </summary>
+    /// <param name="console">The console to clear the prompt from.</param>
+    private void ClearPromptLine(IAnsiConsole console)
+    {
+        if (!ClearOnFinish)
+        {
+            return;
+        }
+
+        ArgumentNullException.ThrowIfNull(console);
+
+        if (!console.Profile.Capabilities.Ansi)
+        {
+            return;
+        }
+
+        console.Cursor.MoveUp();
+        console.Write(ControlCode.Create(console, writer =>
+        {
+            writer.Write("\r");
+            writer.EraseInLine(2);
+        }));
     }
 
     private bool ValidateResult(T value, [NotNullWhen(false)] out string? message)

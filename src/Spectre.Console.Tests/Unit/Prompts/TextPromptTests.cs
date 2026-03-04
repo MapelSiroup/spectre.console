@@ -410,4 +410,47 @@ public sealed class TextPromptTests
         // Then
         return Verifier.Verify(console.Output);
     }
+
+    [Fact]
+    [Expectation("InvalidDefaultChoice")]
+    public Task Should_Return_Error_If_Default_Choice_Invalid()
+    {
+        // Given
+        var console = new TestConsole();
+        console.Input.PushTextWithEnter("");
+        console.Input.PushTextWithEnter("a");
+
+        // When
+        console.Prompt(
+            new TextPrompt<string>("Favorite fruit?")
+                .AddChoice("Banana")
+                .AddChoice("Orange")
+                .DefaultValue("Banan")
+                .ShowDefaultValue(true)
+                .DefaultInput(true));
+
+        // Then
+        return Verifier.Verify(console.Output);
+    }
+
+    [Fact]
+    [Expectation("ClearOnFinish")]
+    public Task Should_Clear_Prompt_Line_When_ClearOnFinish_Is_Enabled()
+    {
+        // Given
+        var console = new TestConsole
+        {
+            EmitAnsiSequences = true,
+        };
+        console.Input.PushTextWithEnter("secret-value");
+
+        // When
+        console.Prompt(
+            new TextPrompt<string>("Enter a value")
+                .Secret()
+                .ClearOnFinish());
+
+        // Then
+        return Verifier.Verify(console.Output);
+    }
 }
