@@ -5,7 +5,7 @@ namespace Spectre.Console;
 /// </summary>
 public static partial class AnsiConsoleExtensions
 {
-    internal static async Task<string> ReadLine(this IAnsiConsole console, Style? style, bool secret, char? mask, IEnumerable<string>? items = null, CancellationToken cancellationToken = default)
+    internal static async Task<string> ReadLine(this IAnsiConsole console, Style? style, bool secret, char? mask, IEnumerable<string>? items = null, string? initialText = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(console);
 
@@ -13,6 +13,25 @@ public static partial class AnsiConsoleExtensions
         var text = string.Empty;
 
         var autocomplete = new List<string>(items ?? []);
+
+        Queue<ConsoleKeyInfo>? injectedQueue = null;
+        if (!string.IsNullOrEmpty(initialText))
+        {
+            injectedQueue = new Queue<ConsoleKeyInfo>();
+            foreach (var ch in initialText)
+            {
+                var control = char.IsUpper(ch);
+                injectedQueue.Enqueue(new ConsoleKeyInfo(ch, (ConsoleKey)ch, false, false, control));
+            }
+        }
+        //var text = initialText ?? string.Empty;
+//
+        //if (!string.IsNullOrEmpty(text))
+        //{
+        //    console.Write(secret ? text.Mask(mask) : text, style);
+        //}
+//
+        //var autocomplete = new List<string>(items ?? []);
 
         while (true)
         {
@@ -39,7 +58,7 @@ public static partial class AnsiConsoleExtensions
                 {
                     // Render the suggestion
                     console.Write("\b \b".Repeat(text.Length), style);
-                    console.Write(replace);
+                    console.Write(replace, style);
                     text = replace;
                     continue;
                 }
@@ -63,6 +82,17 @@ public static partial class AnsiConsoleExtensions
                             console.Write("\b \b\b \b");
                         }
                     }
+                    //else
+                    //{
+                    //    if (UnicodeCalculator.GetWidth(lastChar) == 1)
+                    //    {
+                    //        console.Write("\b \b");
+                    //    }
+                    //    else if (UnicodeCalculator.GetWidth(lastChar) == 2)
+                    //    {
+                    //        console.Write("\b \b\b \b");
+                    //    }
+                    //}
                 }
 
                 continue;
