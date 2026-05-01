@@ -8,20 +8,22 @@ internal sealed class DefaultProgressRenderer : ProgressRenderer
     private readonly object _lock;
     private readonly Stopwatch _stopwatch;
     private readonly bool _hideCompleted;
+    private readonly bool _excludeVerticalPadding;
     private readonly Func<IRenderable, IReadOnlyList<ProgressTask>, IRenderable> _renderHook;
     private TimeSpan _lastUpdate;
 
     public override TimeSpan RefreshRate { get; }
 
-    public DefaultProgressRenderer(IAnsiConsole console, List<ProgressColumn> columns, TimeSpan refreshRate, bool hideCompleted, Func<IRenderable, IReadOnlyList<ProgressTask>, IRenderable> renderHook)
+    public DefaultProgressRenderer(IAnsiConsole console, List<ProgressColumn> columns, TimeSpan refreshRate, bool hideCompleted, bool excludeVerticalPadding, Func<IRenderable, IReadOnlyList<ProgressTask>, IRenderable> renderHook)
     {
         _console = console ?? throw new ArgumentNullException(nameof(console));
         _columns = columns ?? throw new ArgumentNullException(nameof(columns));
         _live = new LiveRenderable(console);
-        _lock = new object();
+        _lock = new();
         _stopwatch = new Stopwatch();
         _lastUpdate = TimeSpan.Zero;
         _hideCompleted = hideCompleted;
+        _excludeVerticalPadding = excludeVerticalPadding;
         _renderHook = renderHook;
 
         RefreshRate = refreshRate;
@@ -102,7 +104,7 @@ internal sealed class DefaultProgressRenderer : ProgressRenderer
             var layout = new Grid();
             layout.AddColumn();
 
-            foreach (var task in tasks.Where(tsk => !(_hideCompleted && tsk.IsFinished)))
+            foreach (var task in tasks.Where(tsk => !((tsk.HideWhenCompleted ?? _hideCompleted) && tsk.IsFinished)))
             {
                 var columns = _columns.Select(column => column.Render(renderContext, task, delta));
                 grid.AddRow(columns.ToArray());
@@ -110,7 +112,7 @@ internal sealed class DefaultProgressRenderer : ProgressRenderer
 
             layout.AddRow(grid);
 
-            _live.SetRenderable(new Padder(_renderHook(layout, tasks), new Padding(0, 1)));
+            _live.SetRenderable(_excludeVerticalPadding ? _renderHook(layout, tasks) : new Padder(_renderHook(layout, tasks), new Padding(0, 1)));
         }
     }
 

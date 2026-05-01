@@ -320,6 +320,22 @@ public sealed class TextPromptTests
     }
 
     [Fact]
+    [Expectation("Issue_1638")]
+    public Task Should_Append_Colon_When_No_Default_Value_Is_Set()
+    {
+        // Given
+        var console = new TestConsole();
+        console.Input.PushTextWithEnter("input");
+
+        // When
+        console.Prompt(
+            new TextPrompt<string>("no default, with suffix"));
+
+        // Then
+        return Verifier.Verify(console.Output);
+    }
+
+    [Fact]
     [Expectation("DefaultValueStyleNotSet")]
     public Task Uses_default_style_for_default_value_if_no_style_is_set()
     {
@@ -409,5 +425,68 @@ public sealed class TextPromptTests
 
         // Then
         return Verifier.Verify(console.Output);
+    }
+
+    [Fact]
+    [Expectation("InvalidDefaultChoice")]
+    public Task Should_Return_Error_If_Default_Choice_Invalid()
+    {
+        // Given
+        var console = new TestConsole();
+        console.Input.PushTextWithEnter("");
+        console.Input.PushTextWithEnter("a");
+
+        // When
+        console.Prompt(
+            new TextPrompt<string>("Favorite fruit?")
+                .AddChoice("Banana")
+                .AddChoice("Orange")
+                .DefaultValue("Banan")
+                .ShowDefaultValue(true)
+                .EditableDefaultValue(true));
+
+        // Then
+        return Verifier.Verify(console.Output);
+    }
+
+    [Fact]
+    [Expectation("ClearOnFinish")]
+    public Task Should_Clear_Prompt_Line_When_ClearOnFinish_Is_Enabled()
+    {
+        // Given
+        var console = new TestConsole
+        {
+            EmitAnsiSequences = true,
+        };
+        console.Input.PushTextWithEnter("secret-value");
+
+        // When
+        console.Prompt(
+            new TextPrompt<string>("Enter a value")
+                .Secret()
+                .ClearOnFinish());
+
+        // Then
+        return Verifier.Verify(console.Output);
+    }
+
+    [Theory]
+    [InlineData("yes")]
+    [InlineData("Yes")]
+    [InlineData("YES")]
+    public async Task Uses_case_insensitive_comparison_when_no_comparer_is_passed(string input)
+    {
+        // Given
+        var console = new TestConsole { EmitAnsiSequences = true, };
+        console.Input.PushTextWithEnter(input);
+
+        var prompt = new TextPrompt<string>("Was the tool helpful?")
+            .AddChoices(["Yes", "Partially", "No"]);
+
+        // When
+        var result = await console.PromptAsync(prompt);
+
+        // Then
+        result.ShouldBe("Yes");
     }
 }

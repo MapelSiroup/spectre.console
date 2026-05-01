@@ -14,13 +14,12 @@ internal sealed class AnsiConsoleFacade : IAnsiConsole
 
     public AnsiConsoleFacade(Profile profile, IExclusivityMode exclusivityMode)
     {
-        _renderLock = new object();
-
         Profile = profile ?? throw new ArgumentNullException(nameof(profile));
         Input = new DefaultInput(Profile);
         ExclusivityMode = exclusivityMode ?? throw new ArgumentNullException(nameof(exclusivityMode));
         Pipeline = new RenderPipeline();
 
+        _renderLock = new object();
         _ansiBackend = new AnsiConsoleBackend(this);
         _legacyBackend = new LegacyConsoleBackend(this);
     }

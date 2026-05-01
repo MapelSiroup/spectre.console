@@ -60,6 +60,17 @@ public sealed class MultiSelectionPrompt<T> : IPrompt<List<T>>, IListPromptStrat
     internal ListPromptTree<T> Tree { get; }
 
     /// <summary>
+    /// Gets or sets the choice to show as selected when the prompt is first displayed.
+    /// By default the first choice is selected.
+    /// </summary>
+    public T? DefaultValue { get; set; }
+
+    /// <summary>
+    /// Gets or sets a Func that will be triggered if Cancel is triggered by the 'ESC' key.
+    /// </summary>
+    public Func<List<T>>? CancelResult { get; set; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="MultiSelectionPrompt{T}"/> class.
     /// </summary>
     /// <param name="comparer">
@@ -96,6 +107,11 @@ public sealed class MultiSelectionPrompt<T> : IPrompt<List<T>>, IListPromptStrat
         var prompt = new ListPrompt<T>(console, this);
         var converter = Converter ?? TypeConverterHelper.ConvertToString;
         var result = await prompt.Show(Tree, converter, Mode, false, false, PageSize, WrapAround, cancellationToken).ConfigureAwait(false);
+
+        if (result.IsCancelled && CancelResult is not null)
+        {
+            return CancelResult();
+        }
 
         if (Mode == SelectionMode.Leaf)
         {
@@ -149,6 +165,11 @@ public sealed class MultiSelectionPrompt<T> : IPrompt<List<T>>, IListPromptStrat
     /// <inheritdoc/>
     ListPromptInputResult IListPromptStrategy<T>.HandleInput(ConsoleKeyInfo key, ListPromptState<T> state)
     {
+        if (key.Key == ConsoleKey.Escape && CancelResult is not null)
+        {
+            return ListPromptInputResult.Abort;
+        }
+
         if (key.Key == ConsoleKey.Enter)
         {
             if (Required && state.Items.None(x => x.IsSelected))
@@ -277,5 +298,16 @@ public sealed class MultiSelectionPrompt<T> : IPrompt<List<T>>, IListPromptStrat
 
         // Combine all items
         return new Rows(list);
+    }
+
+    /// <inheritdoc/>
+    int IListPromptStrategy<T>.CalculateInitialIndex(IReadOnlyList<ListPromptItem<T>> nodes)
+    {
+        if (DefaultValue is not null)
+        {
+            return Tree.IndexOf(DefaultValue) ?? 0;
+        }
+
+        return 0;
     }
 }

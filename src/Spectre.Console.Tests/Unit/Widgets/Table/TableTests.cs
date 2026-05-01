@@ -1000,4 +1000,57 @@ public sealed class TableTests
         // Then
         return Verifier.Verify(console.Output);
     }
+
+    [Fact]
+    [GitHubIssue("https://github.com/spectreconsole/spectre.console/issues/2033")]
+    public void Should_Not_Throw_When_Rendering_Long_CJK_Header_In_Narrow_Console()
+    {
+        // Given
+        var console = new TestConsole().Width(50);
+        var table = new Table()
+            .AddColumn("测试测试测试测试测试测试测试测试测试测试测试测试测试测试测试测试");
+
+        // When
+        var result = Record.Exception(() => console.Write(table));
+
+        // Then
+        result.ShouldBeNull();
+    }
+
+    [Fact]
+    [GitHubIssue("https://github.com/spectreconsole/spectre.console/issues/2033")]
+    public void Should_Not_Throw_When_Rendering_Multiple_Long_CJK_Headers_In_Narrow_Console()
+    {
+        // Given
+        var console = new TestConsole().Width(50);
+        var table = new Table()
+            .AddColumn("测试测试测试测试测试测试测试测试")
+            .AddColumn("测试测试测试测试测试测试测试测试")
+            .AddColumn("测试测试测试测试测试测试测试测试");
+
+        // When
+        var result = Record.Exception(() => console.Write(table));
+
+        // Then
+        result.ShouldBeNull();
+    }
+
+    [Fact]
+    [Expectation("Render_Wide_Emoji_Hearts")]
+    [GitHubIssue("https://github.com/spectreconsole/spectre.console/issues/1847")]
+    public Task Should_Render_Table_With_Wide_Emoji_Correctly()
+    {
+        // Given
+        var console = new TestConsole();
+        var table = new Table();
+        table.AddColumns("hearts", "length", "LengthInTextElements");
+        table.AddRow("wide ❤️", "2", "1");
+        table.AddRow("normal ♥", "1", "1");
+
+        // When
+        console.Write(table);
+
+        // Then
+        return Verifier.Verify(console.Output);
+    }
 }

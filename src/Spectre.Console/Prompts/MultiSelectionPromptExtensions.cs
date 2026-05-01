@@ -300,4 +300,83 @@ public static class MultiSelectionPromptExtensions
         obj.Converter = displaySelector;
         return obj;
     }
+
+    /// <summary>
+    /// Sets the value that will be returned if the prompt is cancelled with 'ESC'.
+    /// </summary>
+    /// <typeparam name="T">The prompt result type.</typeparam>
+    /// <param name="obj">The prompt.</param>
+    /// <param name="cancelResultFunc">A Func that is returning a value on cancel.</param>
+    /// <returns>The same instance so that multiple calls can be chained.</returns>
+    public static MultiSelectionPrompt<T> AddCancelResult<T>(this MultiSelectionPrompt<T> obj, Func<List<T>> cancelResultFunc)
+        where T : notnull
+    {
+        ArgumentNullException.ThrowIfNull(obj);
+
+        obj.CancelResult = cancelResultFunc;
+        return obj;
+    }
+
+    /// <summary>
+    /// Sets a Func that will be triggered if the prompt is cancelled with 'ESC'.
+    /// Sets result to the configured List.
+    /// </summary>
+    /// <typeparam name="T">The prompt result type.</typeparam>
+    /// <param name="obj">The prompt.</param>
+    /// <param name="cancelResult">The value to be returned on cancel.</param>
+    /// <returns>The same instance so that multiple calls can be chained.</returns>
+    public static MultiSelectionPrompt<T> AddCancelResult<T>(this MultiSelectionPrompt<T> obj, List<T> cancelResult)
+        where T : notnull
+    {
+        ArgumentNullException.ThrowIfNull(obj);
+
+        return obj.AddCancelResult(() => cancelResult);
+    }
+
+    /// <summary>
+    /// Sets a Func that will be triggered if the prompt is cancelled with 'ESC'.
+    /// Sets result to a List containing only the configured item.
+    /// </summary>
+    /// <typeparam name="T">The prompt result type.</typeparam>
+    /// <param name="obj">The prompt.</param>
+    /// <param name="cancelResult">The value to be returned on cancel.</param>
+    /// <returns>The same instance so that multiple calls can be chained.</returns>
+    public static MultiSelectionPrompt<T> AddCancelResult<T>(this MultiSelectionPrompt<T> obj, T cancelResult)
+        where T : notnull
+    {
+        ArgumentNullException.ThrowIfNull(obj);
+
+        return obj.AddCancelResult([cancelResult]);
+    }
+
+    /// <summary>
+    /// Sets a Func that will be triggered if the prompt is cancelled with 'ESC'.
+    /// Sets result to an empty List.
+    /// </summary>
+    /// <typeparam name="T">The prompt result type.</typeparam>
+    /// <param name="obj">The prompt.</param>
+    /// <returns>The same instance so that multiple calls can be chained.</returns>
+    public static MultiSelectionPrompt<T> AddCancelResult<T>(this MultiSelectionPrompt<T> obj)
+        where T : notnull
+    {
+        ArgumentNullException.ThrowIfNull(obj);
+
+        return obj.AddCancelResult([]);
+    }
+
+    /// <summary>
+    /// Sets the choice that will be selected when the prompt is first displayed.
+    /// </summary>
+    /// <typeparam name="T">The prompt result type.</typeparam>
+    /// <param name="obj">The prompt.</param>
+    /// <param name="defaultValue">The choice to show as selected when the prompt is first displayed.</param>
+    /// <returns>The same instance so that multiple calls can be chained.</returns>
+    public static MultiSelectionPrompt<T> DefaultValue<T>(this MultiSelectionPrompt<T> obj, T? defaultValue)
+        where T : notnull
+    {
+        ArgumentNullException.ThrowIfNull(obj);
+
+        obj.DefaultValue = defaultValue;
+        return obj;
+    }
 }

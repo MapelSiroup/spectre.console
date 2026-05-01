@@ -5,8 +5,8 @@ public partial class AnsiConsoleTests
     public sealed class Markup
     {
         [Theory]
-        [InlineData("[yellow]Hello[/]", "[93mHello[0m")]
-        [InlineData("[yellow]Hello [italic]World[/]![/]", "[93mHello [0m[3;93mWorld[0m[93m![0m")]
+        [InlineData("[yellow]Hello[/]", "\e[93mHello\e[0m")]
+        [InlineData("[yellow]Hello [italic]World[/]![/]", "\e[93mHello \e[0m\e[3;93mWorld\e[0m\e[93m!\e[0m")]
         public void Should_Output_Expected_Ansi_For_Markup(string markup, string expected)
         {
             // Given
@@ -32,7 +32,8 @@ public partial class AnsiConsoleTests
             console.Markup("[link=https://patriksvensson.se]Click to visit my blog[/]");
 
             // Then
-            console.Output.ShouldMatch("]8;id=[0-9]*;https:\\/\\/patriksvensson\\.se\\\\Click to visit my blog]8;;\\\\");
+            console.Output.ShouldMatch(
+                "\e]8;id=[0-9]*;https:\\/\\/patriksvensson\\.se\e\\\\Click to visit my blog\e]8;;\e\\\\");
         }
 
         [Fact]
@@ -46,7 +47,8 @@ public partial class AnsiConsoleTests
             console.Markup("[link]https://patriksvensson.se[/]");
 
             // Then
-            console.Output.ShouldMatch("]8;id=[0-9]*;https:\\/\\/patriksvensson\\.se\\\\https:\\/\\/patriksvensson\\.se]8;;\\\\");
+            console.Output.ShouldMatch(
+                "\e]8;id=[0-9]*;https:\\/\\/patriksvensson\\.se\e\\\\https:\\/\\/patriksvensson\\.se\e]8;;\e\\\\");
         }
 
         [Fact]
@@ -61,7 +63,8 @@ public partial class AnsiConsoleTests
             console.Markup($"[link]{Path.EscapeMarkup()}[/]");
 
             // Then
-            console.Output.ShouldMatch("]8;id=[0-9]*;file:\\/\\/c:\\/temp\\/\\[x\\].txt\\\\file:\\/\\/c:\\/temp\\/\\[x\\].txt]8;;\\\\");
+            console.Output.ShouldMatch(
+                "\e]8;id=[0-9]*;file:\\/\\/c:\\/temp\\/\\[x\\].txt\e\\\\file:\\/\\/c:\\/temp\\/\\[x\\].txt\e]8;;\e\\\\");
         }
 
         [Fact]
@@ -76,11 +79,12 @@ public partial class AnsiConsoleTests
             console.Markup($"[link={Path.EscapeMarkup()}]{Path.EscapeMarkup()}[/]");
 
             // Then
-            console.Output.ShouldMatch("]8;id=[0-9]*;file:\\/\\/c:\\/temp\\/\\[x\\].txt\\\\file:\\/\\/c:\\/temp\\/\\[x\\].txt]8;;\\\\");
+            console.Output.ShouldMatch(
+                "\e]8;id=[0-9]*;file:\\/\\/c:\\/temp\\/\\[x\\].txt\e\\\\file:\\/\\/c:\\/temp\\/\\[x\\].txt\e]8;;\e\\\\");
         }
 
         [Theory]
-        [InlineData("[yellow]Hello [[ World[/]", "[93mHello [ World[0m")]
+        [InlineData("[yellow]Hello [[ World[/]", "\e[93mHello [ World\e[0m")]
         public void Should_Be_Able_To_Escape_Tags(string markup, string expected)
         {
             // Given
@@ -173,6 +177,87 @@ public partial class AnsiConsoleTests
 
             // Then
             console.Output.ShouldBe(expected);
+        }
+
+        [Fact]
+        [GitHubIssue("https://github.com/spectreconsole/spectre.console/issues/2083")]
+        [GitHubIssue("https://github.com/spectreconsole/spectre.console/issues/2078")]
+        public void Should_Preserve_Links_When_Multiple_Segments_Are_Merged()
+        {
+            // Given
+            var console = new TestConsole()
+                .Width(8)
+                .SupportsAnsi(true)
+                .EmitAnsiSequences();
+
+            // When
+            console.Write(
+                Align.Center(
+                    new Spectre.Console.Markup(
+                        "[link=https://example.com/readme.md]Docs[/]")));
+
+            // Then
+            console.Output.NormalizeLineEndings().ShouldMatch(
+                "  \e]8;id=[0-9]*;https:\\/\\/example\\.com\\/readme.md\e\\\\Docs\e]8;;\e\\\\  ");
+        }
+
+        [Fact]
+        [GitHubIssue("https://github.com/spectreconsole/spectre.console/issues/2083")]
+        [GitHubIssue("https://github.com/spectreconsole/spectre.console/issues/2078")]
+        public void Should_Preserve_Links_Over_Line_Breaks_When_Multiple_Segments_Are_Merged()
+        {
+            // Given
+            var console = new TestConsole()
+                .Width(8)
+                .SupportsAnsi(true)
+                .EmitAnsiSequences();
+
+            // When
+            console.Write(
+                Align.Center(
+                    new Spectre.Console.Markup(
+                        "[link=https://example.com/readme.md]Foo and Bar[/]")));
+
+            // Then
+            console.Output.NormalizeLineEndings().ShouldMatch(
+                "\e]8;id=[0-9]*;https:\\/\\/example\\.com\\/readme.md\e\\\\Foo and \e]8;;\e\\\\\n" +
+                "  \e]8;id=[0-9]*;https:\\/\\/example\\.com\\/readme.md\e\\\\Bar\e]8;;\e\\\\   ");
+        }
+
+        [Fact]
+        public void Should_Not_Apply_Link_To_Text_After_Link_Close_Tag()
+        {
+            // Given
+            var console = new TestConsole()
+                .EmitAnsiSequences();
+
+            // When - text after the [/] closing tag should NOT have the link
+            console.Markup("Before [link=https://example.com]LINK[/] After");
+
+            // Then
+            // The link should only wrap "LINK", not " After"
+            var output = console.Output;
+            output.ShouldMatch(@"Before \e\]8;id=\d+;https://example\.com\e\\LINK\e\]8;;\e\\ After");
+        }
+
+        [Fact]
+        public void Should_Properly_Handle_Nested_Link_With_Styles()
+        {
+            // Given
+            var console = new TestConsole()
+                .EmitAnsiSequences();
+
+            // When - link with styled text inside
+            console.Markup("[link=https://example.com][bold]Bold Link[/][/] Plain");
+
+            // Then
+            // The link should only wrap "Bold Link", not " Plain"
+            var output = console.Output;
+
+            // Check that "Plain" is NOT inside a link
+            var linkEndIndex = output.LastIndexOf("\u001b]8;;\u001b\\");
+            var plainIndex = output.IndexOf("Plain");
+            plainIndex.ShouldBeGreaterThan(linkEndIndex, "Plain should appear after the link ends");
         }
     }
 }

@@ -12,6 +12,7 @@ internal sealed class ListPromptState<T>
     public SelectionMode Mode { get; }
     public bool SkipUnselectableItems { get; private set; }
     public bool SearchEnabled { get; }
+    public bool IsCancelled { get; private set; }
     public IReadOnlyList<ListPromptItem<T>> Items { get; }
     private readonly IReadOnlyList<int>? _leafIndexes;
 
@@ -24,7 +25,8 @@ internal sealed class ListPromptState<T>
         int pageSize, bool wrapAround,
         SelectionMode mode,
         bool skipUnselectableItems,
-        bool searchEnabled)
+        bool searchEnabled,
+        int initialIndex)
     {
         _converter = converter ?? throw new ArgumentNullException(nameof(converter));
         Items = items;
@@ -45,11 +47,11 @@ internal sealed class ListPromptState<T>
                     .ToList()
                     .AsReadOnly();
 
-            Index = _leafIndexes.FirstOrDefault();
+            Index = _leafIndexes.Contains(initialIndex) ? initialIndex : _leafIndexes.FirstOrDefault();
         }
         else
         {
-            Index = 0;
+            Index = initialIndex;
         }
     }
 
@@ -178,5 +180,10 @@ internal sealed class ListPromptState<T>
         }
 
         return false;
+    }
+
+    internal void Cancel()
+    {
+        IsCancelled = true;
     }
 }

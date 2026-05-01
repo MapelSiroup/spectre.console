@@ -63,12 +63,6 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
     public bool ShowDefaultValue { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets the default value input method. Defaults to false.
-    /// When enabled, the default value is placed in the input buffer.
-    /// </summary>
-    public bool DefaultInput { get; set; }
-
-    /// <summary>
     /// Gets or sets the default value editable state that allows the injection of the DefaultValue in the text field.
     /// If true this places the DefaultValue in the input buffer which can then be edited by the user.
     /// </summary>
@@ -78,6 +72,12 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
     /// Gets or sets a value indicating whether or not an empty result is valid.
     /// </summary>
     public bool AllowEmpty { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the prompt line
+    /// should be cleared after a successful input.
+    /// </summary>
+    public bool ClearOnFinish { get; set; }
 
     /// <summary>
     /// Gets or sets the converter to get the display string for a choice. By default
@@ -113,7 +113,7 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
     public TextPrompt(string prompt, StringComparer? comparer = null)
     {
         _prompt = prompt ?? throw new System.ArgumentNullException(nameof(prompt));
-        _comparer = comparer;
+        _comparer = comparer ?? StringComparer.OrdinalIgnoreCase;
     }
 
     /// <summary>
@@ -220,15 +220,20 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
             var choices = Choices.Select(choice => converter(choice)).ToList();
             var choiceMap = Choices.ToDictionary(choice => converter(choice), choice => choice, _comparer);
 
+            WritePrompt(console);
+
             while (true)
             {
-                WritePrompt(console);
+                string input;
+                if (EditableDefaultValue && DefaultValue != null)
+                {
+                    input = await console.ReadLine(promptStyle, IsSecret, Mask, choices, cancellationToken, converter(DefaultValue.Value)).ConfigureAwait(false);
+                }
+                else
+                {
+                    input = await console.ReadLine(promptStyle, IsSecret, Mask, choices, cancellationToken).ConfigureAwait(false);
+                }
 
-                var initialText = DefaultInput && DefaultValue != null
-                    ? converter(DefaultValue.Value)
-                    : string.Empty;
-
-                var input = await console.ReadLine(promptStyle, IsSecret, Mask, choices, initialText, cancellationToken).ConfigureAwait(false);
 
 
                 // Nothing entered?
@@ -250,21 +255,6 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
                     }
                 }
 
-                //if (string.IsNullOrWhiteSpace(input))
-                //{
-                //    if (DefaultValue != null)
-                //    {
-                //        console.WriteLine();
-                //        return DefaultValue.Value;
-                //    }
-//
-                //    if (!AllowEmpty)
-                //    {
-                //        console.WriteLine();
-                //        continue;
-                //    }
-                //}
-
                 console.WriteLine();
 
                 T? result;
@@ -272,25 +262,32 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
                 {
                     if (choiceMap.TryGetValue(input, out result) && result != null)
                     {
+                        ClearPromptLine(console);
                         return result;
                     }
-
-                    console.MarkupLine(InvalidChoiceMessage);
-                    continue;
+                    else
+                    {
+                        console.MarkupLine(InvalidChoiceMessage);
+                        WritePrompt(console);
+                        continue;
+                    }
                 }
-
-                if (!TypeConverterHelper.TryConvertFromStringWithCulture<T>(input, Culture, out result) || result == null)
+                else if (!TypeConverterHelper.TryConvertFromStringWithCulture<T>(input, Culture, out result) || result == null)
                 {
                     console.MarkupLine(ValidationErrorMessage);
+                    WritePrompt(console);
                     continue;
                 }
 
+                // Run all validators
                 if (!ValidateResult(result, out var validationMessage))
                 {
                     console.MarkupLine(validationMessage);
+                    WritePrompt(console);
                     continue;
                 }
 
+                ClearPromptLine(console);
                 return result;
             }
         }).ConfigureAwait(false);
@@ -326,7 +323,7 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
             var choices = Choices.Select(choice => converter(choice)).ToList();
             var choiceMap = Choices.ToDictionary(choice => converter(choice), choice => choice, _comparer);
 
-            _currentInput = DefaultInput && DefaultValue != null
+            _currentInput = EditableDefaultValue && DefaultValue != null
                 ? converter(DefaultValue.Value)
                 : string.Empty;
 
@@ -427,10 +424,10 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
         var builder = new StringBuilder();
         builder.Append(_prompt.TrimEnd());
 
-        var appendSuffix = false;
+        var hasPromptDetails = false;
         if (ShowChoices && Choices.Count > 0)
         {
-            appendSuffix = true;
+            hasPromptDetails = true;
             var converter = Converter ?? TypeConverterHelper.ConvertToString;
             var choices = string.Join("/", Choices.Select(choice => converter(choice)));
             var choicesStyle = ChoicesStyle?.ToMarkup() ?? "blue";
@@ -439,7 +436,7 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
 
         if (ShowDefaultValue && DefaultValue != null)
         {
-            appendSuffix = true;
+            hasPromptDetails = true;
             var converter = Converter ?? TypeConverterHelper.ConvertToString;
             var defaultValueStyle = DefaultValueStyle?.ToMarkup() ?? "green";
             var defaultValue = converter(DefaultValue.Value);
@@ -452,7 +449,7 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
         }
 
         var markup = builder.ToString().Trim();
-        if (appendSuffix)
+        if (ShouldAppendColon(markup, hasPromptDetails))
         {
             markup += ":";
         }
@@ -460,6 +457,22 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
         console.Markup(markup + " ");
     }
 
+    /// <summary>
+    /// A colon should be appended when prompt details are rendered, or when a plain prompt does not already end with punctuation.
+    /// </summary>
+    /// <param name="markup">The prompt markup.</param>
+    /// <param name="hasPromptDetails">Whether the prompt includes choices or a default value.</param>
+    /// <returns>Whether a colon should be appended.</returns>
+    private static bool ShouldAppendColon(string markup, bool hasPromptDetails)
+    {
+        if (hasPromptDetails)
+        {
+            return true;
+        }
+
+        var prompt = Markup.Remove(markup).TrimEnd();
+        return prompt.Length > 0 && char.IsLetterOrDigit(prompt[^1]);
+    }
 
     /// <summary>
     /// Clears the prompt line when enabled.
@@ -467,11 +480,11 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
     /// <param name="console">The console to clear the prompt from.</param>
     private void ClearPromptLine(IAnsiConsole console)
     {
-        //if (!ClearOnFinish)
-        //{
-        //    return;
-        //}
-//
+        if (!ClearOnFinish)
+        {
+            return;
+        }
+
         ArgumentNullException.ThrowIfNull(console);
 
         if (!console.Profile.Capabilities.Ansi)
