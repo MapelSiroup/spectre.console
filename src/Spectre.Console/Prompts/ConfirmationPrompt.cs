@@ -50,6 +50,11 @@ public sealed class ConfirmationPrompt : IPrompt<bool>
     public Style? ChoicesStyle { get; set; }
 
     /// <summary>
+    /// Gets or sets the prompt history.
+    /// </summary>
+    public PromptHistory? History { get; set; } = PromptHistory.Default;
+
+    /// <summary>
     /// Gets or sets the string comparer to use when comparing user input
     /// against Yes/No choices.
     /// </summary>
@@ -86,6 +91,7 @@ public sealed class ConfirmationPrompt : IPrompt<bool>
             .ShowDefaultValue(ShowDefaultValue)
             .DefaultValue(DefaultValue ? Yes : No)
             .DefaultValueStyle(DefaultValueStyle)
+            .History(History)
             .AddChoice(Yes)
             .AddChoice(No);
 
