@@ -1,3 +1,5 @@
+using System.Threading;
+
 namespace Spectre.Console.Tests.Unit;
 
 [ExpectationPath("Prompts/Text")]
@@ -31,6 +33,58 @@ public sealed class TextPromptTests
 
         // Then
         return Verifier.Verify(console.Lines);
+    }
+
+    [Fact]
+    public async Task Should_Render_Invalid_Choice_Message_Inside_Panel_When_ShowAsRenderableAsync()
+    {
+        // Given
+        var console = new TestConsole();
+        console.Profile.Capabilities.Interactive = true;
+        console.EmitAnsiSequences();
+        console.Input.PushTextWithEnter("Apple");
+        console.Input.PushTextWithEnter("Banana");
+
+        var prompt = new TextPrompt<string>("Favorite fruit?")
+            .InvalidChoiceMessage("[red]Please select one of the available options[/]")
+            .AddChoice("Banana")
+            .AddChoice("Orange");
+
+        // When
+        await prompt.ShowAsRenderableAsync(
+            console,
+            new Panel(prompt).Header("Fruit").RoundedBorder(),
+            CancellationToken.None);
+
+        // Then
+        console.Output.ShouldContain("Please select one of the available options");
+        console.Output.ShouldContain("Fruit");
+    }
+
+    [Fact]
+    public async Task Should_Accept_Valid_Renderable_Choice_After_Invalid_Attempt()
+    {
+        // Given
+        var console = new TestConsole();
+        console.Profile.Capabilities.Interactive = true;
+        console.EmitAnsiSequences();
+        console.Input.PushTextWithEnter("Apple");
+        console.Input.PushTextWithEnter("Banana");
+
+        var prompt = new TextPrompt<string>("Favorite fruit?")
+            .InvalidChoiceMessage("[red]Please select one of the available options[/]")
+            .AddChoice("Banana")
+            .AddChoice("Orange");
+
+        // When
+        var result = await prompt.ShowAsRenderableAsync(
+            console,
+            new Panel(prompt).Header("Fruit").RoundedBorder(),
+            CancellationToken.None);
+
+        // Then
+        result.ShouldBe("Banana");
+        console.Output.ShouldContain("Please select one of the available options");
     }
 
     [Fact]
@@ -320,6 +374,22 @@ public sealed class TextPromptTests
     }
 
     [Fact]
+    [Expectation("Issue_1638")]
+    public Task Should_Append_Colon_When_No_Default_Value_Is_Set()
+    {
+        // Given
+        var console = new TestConsole();
+        console.Input.PushTextWithEnter("input");
+
+        // When
+        console.Prompt(
+            new TextPrompt<string>("no default, with suffix"));
+
+        // Then
+        return Verifier.Verify(console.Output);
+    }
+
+    [Fact]
     [Expectation("DefaultValueStyleNotSet")]
     public Task Uses_default_style_for_default_value_if_no_style_is_set()
     {
@@ -452,5 +522,25 @@ public sealed class TextPromptTests
 
         // Then
         return Verifier.Verify(console.Output);
+    }
+
+    [Theory]
+    [InlineData("yes")]
+    [InlineData("Yes")]
+    [InlineData("YES")]
+    public async Task Uses_case_insensitive_comparison_when_no_comparer_is_passed(string input)
+    {
+        // Given
+        var console = new TestConsole { EmitAnsiSequences = true, };
+        console.Input.PushTextWithEnter(input);
+
+        var prompt = new TextPrompt<string>("Was the tool helpful?")
+            .AddChoices(["Yes", "Partially", "No"]);
+
+        // When
+        var result = await console.PromptAsync(prompt);
+
+        // Then
+        result.ShouldBe("Yes");
     }
 }

@@ -60,7 +60,7 @@ public static partial class AnsiConsoleExtensions
                 {
                     // Render the suggestion
                     console.Write("\b \b".Repeat(text.Length), style);
-                    console.Write(replace);
+                    console.Write(replace, style);
                     text = replace;
                     continue;
                 }
@@ -84,6 +84,17 @@ public static partial class AnsiConsoleExtensions
                             console.Write("\b \b\b \b");
                         }
                     }
+                    //else
+                    //{
+                    //    if (UnicodeCalculator.GetWidth(lastChar) == 1)
+                    //    {
+                    //        console.Write("\b \b");
+                    //    }
+                    //    else if (UnicodeCalculator.GetWidth(lastChar) == 2)
+                    //    {
+                    //        console.Write("\b \b\b \b");
+                    //    }
+                    //}
                 }
 
                 continue;

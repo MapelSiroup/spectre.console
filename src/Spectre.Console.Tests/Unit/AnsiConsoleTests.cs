@@ -5,8 +5,8 @@ public partial class AnsiConsoleTests
     public sealed class Clear
     {
         [Theory]
-        [InlineData(false, "Hello[2J[3JWorld")]
-        [InlineData(true, "Hello[2J[3J[1;1HWorld")]
+        [InlineData(false, "Hello\e[2J\e[3JWorld")]
+        [InlineData(true, "Hello\e[2J\e[3J\e[1;1HWorld")]
         public void Should_Clear_Screen(bool home, string expected)
         {
             // Given
@@ -123,7 +123,7 @@ public partial class AnsiConsoleTests
 
             // Then
             console.Output.NormalizeLineEndings()
-                .ShouldBe("[101mHello[0m\n[102mWorld[0m\n");
+                .ShouldBe("\e[101mHello\e[0m\n\e[102mWorld\e[0m\n");
         }
 
         [Fact]
@@ -139,7 +139,7 @@ public partial class AnsiConsoleTests
 
             // Then
             console.Output.NormalizeLineEndings()
-                .ShouldBe("[101mHello[0m\n[101mWorld[0m\n");
+                .ShouldBe("\e[101mHello\e[0m\n\e[101mWorld\e[0m\n");
         }
     }
 
@@ -158,5 +158,22 @@ public partial class AnsiConsoleTests
             // Then
             Should.NotThrow(When);
         }
+    }
+
+    [Fact]
+    public void Should_Write_To_New_Output_If_Redirected()
+    {
+        // Given
+        var console = new TestConsole();
+        var redirected = new StringWriter();
+
+        // When
+        console.Write("ABC");
+        console.Profile.Out = new AnsiConsoleOutput(redirected);
+        console.Write("DEF");
+
+        // Then
+        console.Output.ShouldBe("ABC");
+        redirected.ToString().ShouldBe("DEF");
     }
 }

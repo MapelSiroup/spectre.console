@@ -1,4 +1,3 @@
-using Spectre.Console.Rendering;
 using Spectre.Console.Rendering.Prompts;
 
 namespace Spectre.Console;
@@ -13,6 +12,7 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
     private readonly StringComparer? _comparer;
     // State: holds the current input being edited
     private string _currentInput = string.Empty;
+    private string? _message;
 
     /// <summary>
     /// Gets or sets the prompt style.
@@ -107,29 +107,6 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
     internal DefaultPromptValue<T>? DefaultValue { get; set; }
 
     /// <summary>
-    /// Gets the current input state (used by rendering hooks).
-    /// </summary>
-    /// <remarks>
-    /// This is used internally by render hooks to display the current input state.
-    /// In blocking/static mode (Show/ShowAsync), this remains empty and is not used.
-    /// In renderable mode (ShowAsRenderableAsync), this tracks user input.
-    /// </remarks>
-    public string GetInputState() => _currentInput;
-
-    /// <summary>
-    /// Sets the current input state (used by rendering hooks).
-    /// </summary>
-    /// <param name="input">The input to set.</param>
-    /// <remarks>
-    /// This is used internally by render hooks and input handlers.
-    /// External code should not call this directly.
-    /// </remarks>
-    public void SetInputState(string input)
-    {
-        _currentInput = input ?? string.Empty;
-    }
-
-    /// <summary>
     /// Initializes a new instance of the <see cref="TextPrompt{T}"/> class.
     /// </summary>
     /// <param name="prompt">The prompt markup text.</param>
@@ -137,7 +114,7 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
     public TextPrompt(string prompt, StringComparer? comparer = null)
     {
         _prompt = prompt ?? throw new System.ArgumentNullException(nameof(prompt));
-        _comparer = comparer;
+        _comparer = comparer ?? StringComparer.OrdinalIgnoreCase;
     }
 
     /// <summary>
@@ -165,6 +142,12 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
         // Build and render the input field
         var inputRenderable = BuildInputField();
         segments.AddRange(inputRenderable.Render(options, maxWidth));
+
+        if (!string.IsNullOrWhiteSpace(_message))
+        {
+            segments.Add(Segment.LineBreak);
+            segments.AddRange(((IRenderable)new Markup(_message)).Render(options, maxWidth));
+        }
 
         return segments;
     }
@@ -218,9 +201,7 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
     {
         var promptStyle = PromptStyle ?? Style.Plain;
         var displayText = IsSecret ? _currentInput.Mask(Mask) : _currentInput;
-        // Add cursor visualization when in renderable mode (shows _ when empty)
-        var text = new Text(displayText + (string.IsNullOrEmpty(_currentInput) ? "_" : ""), promptStyle);
-        return text;
+        return new Text(displayText, promptStyle);
     }
 
     /// <summary>
@@ -234,7 +215,7 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
         return ShowAsync(console, CancellationToken.None).GetAwaiter().GetResult();
     }
 
-     /// <inheritdoc/>
+    /// <inheritdoc/>
     public async Task<T> ShowAsync(IAnsiConsole console, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(console);
@@ -325,161 +306,124 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
     /// <param name="console">The console to show the prompt in.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The user input converted to the expected type.</returns>
-    /// <remarks>
-    /// This method integrates the prompt into the render pipeline using a hook.
-    /// The prompt can be rendered as part of a layout while capturing input interactively.
-    /// Uses key-by-key input handling for true live rendering updates.
-    /// This differs from Show/ShowAsync which blocks and handle I/O directly.
-    /// </remarks>
-    public async Task<T> ShowAsRenderableAsync(IAnsiConsole console, CancellationToken cancellationToken)
+    public Task<T> ShowAsRenderableAsync(IAnsiConsole console, CancellationToken cancellationToken)
+    {
+        return ShowAsRenderableAsync(console, null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Shows the prompt as a renderable with live input updates via a render hook.
+    /// </summary>
+    /// <param name="console">The console to show the prompt in.</param>
+    /// <param name="wrapper">An optional wrapper renderable, such as a panel.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The user input converted to the expected type.</returns>
+    public async Task<T> ShowAsRenderableAsync(IAnsiConsole console, IRenderable? wrapper, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(console);
 
+        var renderable = wrapper ?? this;
+
         return await console.RunExclusive(async () =>
         {
-            // Reset input state for this session
-            _currentInput = DefaultInput && DefaultValue != null ? 
-                (Converter ?? TypeConverterHelper.ConvertToString)(DefaultValue.Value) : 
-                string.Empty;
-
-            var promptStyle = PromptStyle ?? Style.Plain;
             var converter = Converter ?? TypeConverterHelper.ConvertToString;
             var choices = Choices.Select(choice => converter(choice)).ToList();
             var choiceMap = Choices.ToDictionary(choice => converter(choice), choice => choice, _comparer);
 
-            // Create and register the render hook for live updates
-            var hook = new TextPromptRenderHook<T>(console, () => this);
+            _currentInput = EditableDefaultValue && DefaultValue != null
+                ? converter(DefaultValue.Value)
+                : string.Empty;
+            _message = null;
+
+            var hook = new TextPromptRenderHook<T>(console, () => renderable);
             using (new RenderHookScope(console, hook))
             {
-                // Initial render
+                console.Cursor.Hide();
                 hook.Refresh();
 
                 while (true)
                 {
-                    // Capture input key-by-key for live rendering
-                    var input = await ReadInputAsync(console, choices, cancellationToken).ConfigureAwait(false);
+                    cancellationToken.ThrowIfCancellationRequested();
 
-                    // Nothing entered?
-                    if (string.IsNullOrWhiteSpace(input))
+                    var rawKey = await console.Input.ReadKeyAsync(true, cancellationToken).ConfigureAwait(false);
+                    if (rawKey == null)
                     {
-                        if (DefaultValue != null)
+                        continue;
+                    }
+
+                    if (_message != null)
+                    {
+                        _message = null;
+                    }
+
+                    if (HandleInputKey(rawKey.Value))
+                    {
+                        var input = _currentInput;
+
+                        if (string.IsNullOrWhiteSpace(input))
                         {
-                            return DefaultValue.Value;
+                            if (DefaultValue != null)
+                            {
+                                hook.Clear();
+                                console.Cursor.Show();
+                                console.WriteLine();
+                                return DefaultValue.Value;
+                            }
+
+                            if (!AllowEmpty)
+                            {
+                                _currentInput = string.Empty;
+                                hook.Refresh();
+                                continue;
+                            }
                         }
 
-                        if (!AllowEmpty)
+                        T? result;
+                        if (Choices.Count > 0)
                         {
+                            if (choiceMap.TryGetValue(input, out result) && result != null)
+                            {
+                                hook.Clear();
+                                console.Cursor.Show();
+                                console.WriteLine();
+                                return result;
+                            }
+
+                            _message = InvalidChoiceMessage;
                             _currentInput = string.Empty;
                             hook.Refresh();
                             continue;
                         }
-                    }
 
-                    T? result;
-                    if (Choices.Count > 0)
-                    {
-                        if (choiceMap.TryGetValue(input, out result) && result != null)
+                        if (!TypeConverterHelper.TryConvertFromStringWithCulture<T>(input, Culture, out result) || result == null)
                         {
-                            return result;
-                        }
-                        else
-                        {
-                            console.MarkupLine(InvalidChoiceMessage);
-                            _currentInput = string.Empty;  // Reset for new attempt
+                            _message = ValidationErrorMessage;
+                            _currentInput = string.Empty;
                             hook.Refresh();
                             continue;
                         }
-                    }
-                    else if (!TypeConverterHelper.TryConvertFromStringWithCulture<T>(input, Culture, out result) || result == null)
-                    {
-                        console.MarkupLine(ValidationErrorMessage);
-                        _currentInput = string.Empty;  // Reset for new attempt
-                        hook.Refresh();
-                        continue;
-                    }
 
-                    // Run all validators
-                    if (!ValidateResult(result, out var validationMessage))
-                    {
-                        console.MarkupLine(validationMessage);
-                        _currentInput = string.Empty;  // Reset for new attempt
-                        hook.Refresh();
-                        continue;
-                    }
-
-                    return result;
-                }
-            }
-        }).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Reads input key-by-key with live rendering updates via the hook.
-    /// This method captures individual keystrokes and updates the prompt display in real-time.
-    /// </summary>
-    private async Task<string> ReadInputAsync(IAnsiConsole console, List<string> choices, CancellationToken cancellationToken)
-    {
-        if (!console.Profile.Capabilities.Interactive)
-        {
-            // Fallback to non-interactive mode
-            return string.Empty;
-        }
-
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            if (console.Input.IsKeyAvailable())
-            {
-                var keyInfo = console.Input.ReadKey(intercept: true);
-                if (!keyInfo.HasValue)
-                {
-                    continue;
-                }
-
-                var key = keyInfo.Value;
-
-                if (key.Key == ConsoleKey.Enter)
-                {
-                    // Submit the current input
-                    console.WriteLine();
-                    return _currentInput;
-                }
-
-                if (key.Key == ConsoleKey.Backspace)
-                {
-                    if (_currentInput.Length > 0)
-                    {
-                        _currentInput = _currentInput[..^1];
-                    }
-                }
-                else if (key.Key == ConsoleKey.Tab)
-                {
-                    // Handle autocomplete with choices
-                    if (choices.Count > 0)
-                    {
-                        var replacement = AutoComplete(choices, _currentInput);
-                        if (!string.IsNullOrEmpty(replacement))
+                        if (!ValidateResult(result, out var validationMessage))
                         {
-                            _currentInput = replacement;
+                            _message = validationMessage;
+                            _currentInput = string.Empty;
+                            hook.Refresh();
+                            continue;
                         }
+
+                        hook.Clear();
+                        console.Cursor.Show();
+                        console.WriteLine();
+                        return result;
                     }
-                }
-                else if (!char.IsControl(key.KeyChar))
-                {
-                    // Add regular character to input
-                    _currentInput += key.KeyChar;
-                }
 
-                // Trigger re-render by writing an empty renderable (goes through pipeline -> hook processes)
-                console.Write(new Text(string.Empty));
+                    hook.Refresh();
+                }
             }
-            else
-            {
-                // Small delay to prevent busy-waiting
-                await Task.Delay(10, cancellationToken).ConfigureAwait(false);
-            }
-        }
 
-        return _currentInput;
+            // Should never reach here, but required for compiler.
+            throw new InvalidOperationException("Text prompt ended unexpectedly.");
+        }).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -493,10 +437,10 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
         var builder = new StringBuilder();
         builder.Append(_prompt.TrimEnd());
 
-        var appendSuffix = false;
+        var hasPromptDetails = false;
         if (ShowChoices && Choices.Count > 0)
         {
-            appendSuffix = true;
+            hasPromptDetails = true;
             var converter = Converter ?? TypeConverterHelper.ConvertToString;
             var choices = string.Join("/", Choices.Select(choice => converter(choice)));
             var choicesStyle = ChoicesStyle?.ToMarkup() ?? "blue";
@@ -505,7 +449,7 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
 
         if (ShowDefaultValue && DefaultValue != null)
         {
-            appendSuffix = true;
+            hasPromptDetails = true;
             var converter = Converter ?? TypeConverterHelper.ConvertToString;
             var defaultValueStyle = DefaultValueStyle?.ToMarkup() ?? "green";
             var defaultValue = converter(DefaultValue.Value);
@@ -518,12 +462,29 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
         }
 
         var markup = builder.ToString().Trim();
-        if (appendSuffix)
+        if (ShouldAppendColon(markup, hasPromptDetails))
         {
             markup += ":";
         }
 
         console.Markup(markup + " ");
+    }
+
+    /// <summary>
+    /// A colon should be appended when prompt details are rendered, or when a plain prompt does not already end with punctuation.
+    /// </summary>
+    /// <param name="markup">The prompt markup.</param>
+    /// <param name="hasPromptDetails">Whether the prompt includes choices or a default value.</param>
+    /// <returns>Whether a colon should be appended.</returns>
+    private static bool ShouldAppendColon(string markup, bool hasPromptDetails)
+    {
+        if (hasPromptDetails)
+        {
+            return true;
+        }
+
+        var prompt = Markup.Remove(markup).TrimEnd();
+        return prompt.Length > 0 && char.IsLetterOrDigit(prompt[^1]);
     }
 
     /// <summary>
@@ -642,5 +603,19 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
         }
 
         return string.Empty;
+    }
+
+    /// <summary>
+    /// Builds the renderable for the input field (called by RenderHook).
+    /// This is separate from Render() to keep the hook focused.
+    /// </summary>
+    private IRenderable BuildInputRenderable()
+    {
+        var promptStyle = PromptStyle ?? Style.Plain;
+        var displayText = IsSecret ? _currentInput.Mask(Mask) : _currentInput;
+
+        // Add a cursor indicator if desired
+        var text = new Text(displayText + "_", promptStyle);
+        return text;
     }
 }

@@ -157,6 +157,68 @@ public sealed class AnsiMarkupTests
             // Then
             result.ShouldBe(value);
         }
+
+        [Fact]
+        public void Should_Not_Corrupt_Escaped_Brackets_When_Highlighting()
+        {
+            // Given
+            var value = "MSFT-Provisioning-01[[Prod]] (guid-2)";
+            var searchText = "M";
+
+            // When
+            var result = AnsiMarkup.Highlight(value, searchText, _highlightStyle);
+
+            // Then
+            // The result should be valid markup that can be parsed without throwing
+            var exception = Record.Exception(() => AnsiMarkup.Parse(result));
+            exception.ShouldBeNull();
+        }
+
+        [Theory]
+        [InlineData("Hello [[World]]", "World", "Hello [[[bold on yellow]World[/]]]")]
+        [InlineData("[[Prod]] Service", "Prod", "[[[bold on yellow]Prod[/]]] Service")]
+        [InlineData("Item [[A]] and [[B]]", "A", "Item [[[bold on yellow]A[/]]] and [[B]]")]
+        public void Should_Produce_Valid_Markup_With_Escaped_Brackets(
+            string value, string searchText, string expected)
+        {
+            // Given, When
+            var result = AnsiMarkup.Highlight(value, searchText, _highlightStyle);
+
+            // Then
+            result.ShouldBe(expected);
+        }
+
+        [Fact]
+        public void Should_Highlight_Text_Adjacent_To_Escaped_Brackets()
+        {
+            // Given
+            var value = "MSFT[[Prod]]Service";
+            var searchText = "MSFT";
+
+            // When
+            var result = AnsiMarkup.Highlight(value, searchText, _highlightStyle);
+
+            // Then
+            var exception = Record.Exception(() => AnsiMarkup.Parse(result));
+            exception.ShouldBeNull();
+            result.ShouldBe("[bold on yellow]MSFT[/][[Prod]]Service");
+        }
+
+        [Fact]
+        public void Should_Highlight_Text_After_Escaped_Brackets()
+        {
+            // Given
+            var value = "[[Dev]] Environment";
+            var searchText = "Env";
+
+            // When
+            var result = AnsiMarkup.Highlight(value, searchText, _highlightStyle);
+
+            // Then
+            var exception = Record.Exception(() => AnsiMarkup.Parse(result));
+            exception.ShouldBeNull();
+            result.ShouldBe("[[Dev]] [bold on yellow]Env[/]ironment");
+        }
     }
 
     public sealed class TheWriteMethod
@@ -176,8 +238,8 @@ public sealed class AnsiMarkupTests
         }
 
         [Theory]
-        [InlineData("[yellow]Hello[/]", "[93mHello[0m")]
-        [InlineData("[yellow]Hello [italic]World[/]![/]", "[93mHello [0m[3;93mWorld[0m[93m![0m")]
+        [InlineData("[yellow]Hello[/]", "\e[93mHello\e[0m")]
+        [InlineData("[yellow]Hello [italic]World[/]![/]", "\e[93mHello \e[0m\e[3;93mWorld\e[0m\e[93m!\e[0m")]
         public void Should_Output_Expected_Ansi_For_Markup(string text, string expected)
         {
             // Given
@@ -203,7 +265,7 @@ public sealed class AnsiMarkupTests
 
             // Then
             fixture.Output.ShouldMatch(
-                "]8;id=[0-9]*;https:\\/\\/patriksvensson\\.se\\\\Click to visit my blog]8;;\\\\");
+                "\e]8;id=[0-9]*;https:\\/\\/patriksvensson\\.se\e\\\\Click to visit my blog\e]8;;\e\\\\");
         }
 
         [Fact]
@@ -217,7 +279,7 @@ public sealed class AnsiMarkupTests
 
             // Then
             fixture.Output.ShouldMatch(
-                "]8;id=[0-9]*;https:\\/\\/patriksvensson\\.se\\\\https:\\/\\/patriksvensson\\.se]8;;\\\\");
+                "\e]8;id=[0-9]*;https:\\/\\/patriksvensson\\.se\e\\\\https:\\/\\/patriksvensson\\.se\e]8;;\e\\\\");
         }
 
         [Fact]
@@ -232,7 +294,7 @@ public sealed class AnsiMarkupTests
 
             // Then
             fixture.Output.ShouldMatch(
-                "]8;id=[0-9]*;file:\\/\\/c:\\/temp\\/\\[x\\].txt\\\\file:\\/\\/c:\\/temp\\/\\[x\\].txt]8;;\\\\");
+                "\e]8;id=[0-9]*;file:\\/\\/c:\\/temp\\/\\[x\\].txt\e\\\\file:\\/\\/c:\\/temp\\/\\[x\\].txt\e]8;;\e\\\\");
         }
 
         [Fact]
@@ -248,7 +310,7 @@ public sealed class AnsiMarkupTests
 
             // Then
             fixture.Output.ShouldMatch(
-                "]8;id=[0-9]*;file:\\/\\/c:\\/temp\\/\\[x\\].txt\\\\file:\\/\\/c:\\/temp\\/\\[x\\].txt]8;;\\\\");
+                "\e]8;id=[0-9]*;file:\\/\\/c:\\/temp\\/\\[x\\].txt\e\\\\file:\\/\\/c:\\/temp\\/\\[x\\].txt\e]8;;\e\\\\");
         }
 
         [Theory]

@@ -27,6 +27,9 @@ internal static class Cell
 
     public static int GetCellLength(ReadOnlySpan<char> text)
     {
+#if !NETSTANDARD2_0
+        return UnicodeCalculator.GetWidth(text);
+#else
         var sum = 0;
         foreach (var rune in text)
         {
@@ -34,7 +37,11 @@ internal static class Cell
         }
 
         return sum;
+#endif
     }
+
+    public static int GetCellLength(ReadOnlySpan<char> text)
+        => GetCellLength(text.ToString());
 
     public static int GetCellLength(char rune)
     {

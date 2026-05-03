@@ -60,6 +60,12 @@ public sealed class MultiSelectionPrompt<T> : IPrompt<List<T>>, IListPromptStrat
     internal ListPromptTree<T> Tree { get; }
 
     /// <summary>
+    /// Gets or sets the choice to show as selected when the prompt is first displayed.
+    /// By default the first choice is selected.
+    /// </summary>
+    public T? DefaultValue { get; set; }
+
+    /// <summary>
     /// Gets or sets a Func that will be triggered if Cancel is triggered by the 'ESC' key.
     /// </summary>
     public Func<List<T>>? CancelResult { get; set; }
@@ -94,13 +100,61 @@ public sealed class MultiSelectionPrompt<T> : IPrompt<List<T>>, IListPromptStrat
         return ShowAsync(console, CancellationToken.None).GetAwaiter().GetResult();
     }
 
+    /// <summary>
+    /// Shows the prompt as a renderable with live input updates.
+    /// </summary>
+    /// <param name="console">The console to show the prompt in.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The user input converted to the expected type.</returns>
+    public Task<List<T>> ShowAsRenderableAsync(IAnsiConsole console, CancellationToken cancellationToken)
+    {
+        return ShowAsRenderableAsync(console, null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Shows the prompt as a renderable with live input updates.
+    /// </summary>
+    /// <param name="console">The console to show the prompt in.</param>
+    /// <param name="wrapper">A wrapper for the rendered list, for example a panel.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The user input converted to the expected type.</returns>
+    public async Task<List<T>> ShowAsRenderableAsync(IAnsiConsole console, Func<IRenderable, IRenderable>? wrapper, CancellationToken cancellationToken)
+    {
+        var prompt = new ListPrompt<T>(console, this);
+        var converter = Converter ?? TypeConverterHelper.ConvertToString;
+        var result = await prompt.Show(Tree, converter, Mode, false, false, PageSize, WrapAround, wrapper, cancellationToken).ConfigureAwait(false);
+
+        if (result.IsCancelled && CancelResult is not null)
+        {
+            return CancelResult();
+        }
+
+        if (Mode == SelectionMode.Leaf)
+        {
+            return result.Items
+                .Where(x => x.IsSelected && x.Children.Count == 0)
+                .Select(x => x.Data)
+                .ToList();
+        }
+
+        return result.Items
+            .Where(x => x.IsSelected)
+            .Select(x => x.Data)
+            .ToList();
+    }
+
     /// <inheritdoc/>
     public async Task<List<T>> ShowAsync(IAnsiConsole console, CancellationToken cancellationToken)
     {
         // Create the list prompt
         var prompt = new ListPrompt<T>(console, this);
         var converter = Converter ?? TypeConverterHelper.ConvertToString;
-        var result = await prompt.Show(Tree, converter, Mode, false, false, PageSize, WrapAround, cancellationToken).ConfigureAwait(false);
+        var result = await prompt.Show(Tree, converter, Mode, false, false, PageSize, WrapAround, null, cancellationToken).ConfigureAwait(false);
+
+        if (result.IsCancelled && CancelResult is not null)
+        {
+            return CancelResult();
+        }
 
         if (result.IsCancelled && CancelResult is not null)
         {
@@ -292,5 +346,16 @@ public sealed class MultiSelectionPrompt<T> : IPrompt<List<T>>, IListPromptStrat
 
         // Combine all items
         return new Rows(list);
+    }
+
+    /// <inheritdoc/>
+    int IListPromptStrategy<T>.CalculateInitialIndex(IReadOnlyList<ListPromptItem<T>> nodes)
+    {
+        if (DefaultValue is not null)
+        {
+            return Tree.IndexOf(DefaultValue) ?? 0;
+        }
+
+        return 0;
     }
 }

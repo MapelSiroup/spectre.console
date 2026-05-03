@@ -1,14 +1,13 @@
+using Spectre.Console.Rendering;
+
 namespace Spectre.Console.Rendering.Prompts;
 
-/// <summary>
-/// Render hook for TextPrompt interactive rendering.
-/// Manages the live, updating display of the input field.
-/// </summary>
 internal sealed class TextPromptRenderHook<T> : IRenderHook
 {
     private readonly IAnsiConsole _console;
     private readonly Func<IRenderable> _builder;
     private readonly LiveRenderable _live;
+    private readonly object _lock;
     private bool _dirty;
 
     public TextPromptRenderHook(IAnsiConsole console, Func<IRenderable> builder)
@@ -17,46 +16,39 @@ internal sealed class TextPromptRenderHook<T> : IRenderHook
         _builder = builder ?? throw new ArgumentNullException(nameof(builder));
 
         _live = new LiveRenderable(console);
+        _lock = new object();
         _dirty = true;
     }
 
-    /// <summary>
-    /// Marks the renderable as dirty, triggering a rebuild on next pipeline pass.
-    /// </summary>
     public void Refresh()
     {
         _dirty = true;
-        _console.Write(ControlCode.Empty);  // Trigger the pipeline
+        _console.Write(ControlCode.Empty);
     }
 
-    /// <summary>
-    /// Clears the live renderable and restores cursor position.
-    /// </summary>
     public void Clear()
     {
         _console.Write(_live.RestoreCursor());
     }
 
-    /// <summary>
-    /// IRenderHook: intercepts the render pipeline.
-    /// </summary>
     public IEnumerable<IRenderable> Process(RenderOptions options, IEnumerable<IRenderable> renderables)
     {
-        // Rebuild the input field renderable if state changed
-        if (!_live.HasRenderable || _dirty)
+        lock (_lock)
         {
-            _live.SetRenderable(_builder());
-            _dirty = false;
+            if (!_live.HasRenderable || _dirty)
+            {
+                _live.SetRenderable(_builder());
+                _dirty = false;
+            }
+
+            yield return _live.PositionCursor(options);
+
+            foreach (var renderable in renderables)
+            {
+                yield return renderable;
+            }
+
+            yield return _live;
         }
-
-        // Emit the live renderable and any other renderables in the pipeline
-        yield return _live.PositionCursor(options);
-
-        foreach (var renderable in renderables)
-        {
-            yield return renderable;
-        }
-
-        yield return _live;
     }
 }

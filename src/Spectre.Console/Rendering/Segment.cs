@@ -109,6 +109,11 @@ public class Segment
             return 0;
         }
 
+        if (Text == "\n") 
+        {
+            return 1;
+        }
+
         return Cell.GetCellLength(Text);
     }
 
@@ -160,10 +165,12 @@ public class Segment
         if (offset > 0)
         {
             var accumulated = 0;
-            foreach (var character in Text)
+            var enumerator = StringInfo.GetTextElementEnumerator(Text);
+            while (enumerator.MoveNext())
             {
-                index++;
-                accumulated += Cell.GetCellLength(character);
+                var cluster = enumerator.GetTextElement();
+                accumulated += Cell.GetCellLength(cluster);
+                index += cluster.Length;
                 if (accumulated >= offset)
                 {
                     break;
@@ -222,8 +229,7 @@ public class Segment
             var lineLength = line.CellCount();
             if (lineLength + segmentLength > maxWidth)
             {
-                var diff = -(maxWidth - (lineLength + segmentLength));
-                var offset = segment.Text.Length - diff;
+                var offset = maxWidth - lineLength;
 
                 var (first, second) = segment.Split(offset);
 
@@ -274,7 +280,7 @@ public class Segment
                             line = [];
                         }
 
-                        text = string.Concat(parts.Skip(1).Take(parts.Length - 1));
+                        text = string.Join('\n', parts.Skip(1).Take(parts.Length - 1));
                     }
                     else
                     {
@@ -430,16 +436,18 @@ public class Segment
 
         var builder = new StringBuilder();
         var accumulatedCellWidth = 0;
-        foreach (var character in segment.Text)
+        var truncateEnumerator = StringInfo.GetTextElementEnumerator(segment.Text);
+        while (truncateEnumerator.MoveNext())
         {
-            var characterWidth = UnicodeCalculator.GetWidth(character);
-            if (accumulatedCellWidth + characterWidth > maxWidth)
+            var cluster = truncateEnumerator.GetTextElement();
+            var clusterWidth = Cell.GetCellLength(cluster);
+            if (accumulatedCellWidth + clusterWidth > maxWidth)
             {
                 break;
             }
 
-            builder.Append(character);
-            accumulatedCellWidth += characterWidth;
+            builder.Append(cluster);
+            accumulatedCellWidth += clusterWidth;
         }
 
         if (builder.Length == 0)
@@ -470,9 +478,9 @@ public class Segment
                 continue;
             }
 
-            // Same style?
+            // Same style and link?
             if (segmentBuilder.StyleEquals(segment.Style) && !segmentBuilder.IsLineBreak() &&
-                !segmentBuilder.IsControlCode())
+                !segmentBuilder.IsControlCode() && segmentBuilder.HasSameLink(segment.Link))
             {
                 segmentBuilder.Append(segment.Text);
                 continue;
@@ -572,17 +580,20 @@ public class Segment
 
         var length = 0;
         var sb = new StringBuilder();
-        foreach (var ch in text)
+        var splitEnumerator = StringInfo.GetTextElementEnumerator(text);
+        while (splitEnumerator.MoveNext())
         {
-            if (length + UnicodeCalculator.GetWidth(ch) > maxCellLength)
+            var cluster = splitEnumerator.GetTextElement();
+            var clusterWidth = Cell.GetCellLength(cluster);
+            if (length + clusterWidth > maxCellLength)
             {
                 list.Add(sb.ToString());
                 sb.Clear();
                 length = 0;
             }
 
-            length += UnicodeCalculator.GetWidth(ch);
-            sb.Append(ch);
+            length += clusterWidth;
+            sb.Append(cluster);
         }
 
         list.Add(sb.ToString());
@@ -625,6 +636,16 @@ public class Segment
             _textBuilder.Clear();
             _textBuilder.Append(segment.Text);
             _originalSegment = segment;
+        }
+
+        public bool HasSameLink(Link? link)
+        {
+            if (link == null && _originalSegment.Link == null)
+            {
+                return true;
+            }
+
+            return _originalSegment.Link?.Equals(link) ?? false;
         }
     }
 }

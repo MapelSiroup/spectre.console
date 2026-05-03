@@ -69,6 +69,12 @@ public sealed class SelectionPrompt<T> : IPrompt<T>, IListPromptStrategy<T>
     public bool SearchEnabled { get; set; }
 
     /// <summary>
+    /// Gets or sets the choice to show as selected when the prompt is first displayed.
+    /// By default the first choice is selected.
+    /// </summary>
+    public T? DefaultValue { get; set; }
+
+    /// <summary>
     /// Gets or sets a Func that will be triggered if Cancel is triggered by the 'ESC' key.
     /// </summary>
     public Func<T>? CancelResult { get; set; }
@@ -76,9 +82,13 @@ public sealed class SelectionPrompt<T> : IPrompt<T>, IListPromptStrategy<T>
     /// <summary>
     /// Initializes a new instance of the <see cref="SelectionPrompt{T}"/> class.
     /// </summary>
-    public SelectionPrompt()
+    /// <param name="comparer">
+    /// The <see cref="IEqualityComparer{T}"/> implementation to use when comparing items,
+    /// or <c>null</c> to use the default <see cref="IEqualityComparer{T}"/> for the type of the item.
+    /// </param>
+    public SelectionPrompt(IEqualityComparer<T>? comparer = null)
     {
-        _tree = new ListPromptTree<T>(EqualityComparer<T>.Default);
+        _tree = new ListPromptTree<T>(comparer ?? EqualityComparer<T>.Default);
     }
 
     /// <summary>
@@ -99,13 +109,50 @@ public sealed class SelectionPrompt<T> : IPrompt<T>, IListPromptStrategy<T>
         return ShowAsync(console, CancellationToken.None).GetAwaiter().GetResult();
     }
 
+    /// <summary>
+    /// Shows the prompt as a renderable with live input updates.
+    /// </summary>
+    /// <param name="console">The console to show the prompt in.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The user input converted to the expected type.</returns>
+    public Task<T> ShowAsRenderableAsync(IAnsiConsole console, CancellationToken cancellationToken)
+    {
+        return ShowAsRenderableAsync(console, null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Shows the prompt as a renderable with live input updates.
+    /// </summary>
+    /// <param name="console">The console to show the prompt in.</param>
+    /// <param name="wrapper">A wrapper for the rendered list, for example a panel.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The user input converted to the expected type.</returns>
+    public async Task<T> ShowAsRenderableAsync(IAnsiConsole console, Func<IRenderable, IRenderable>? wrapper, CancellationToken cancellationToken)
+    {
+        var prompt = new ListPrompt<T>(console, this);
+        var converter = Converter ?? TypeConverterHelper.ConvertToString;
+        var result = await prompt.Show(_tree, converter, Mode, true, SearchEnabled, PageSize, WrapAround, wrapper, cancellationToken).ConfigureAwait(false);
+
+        if (result.IsCancelled && CancelResult is not null)
+        {
+            return CancelResult();
+        }
+
+        return result.Items[result.Index].Data;
+    }
+
     /// <inheritdoc/>
     public async Task<T> ShowAsync(IAnsiConsole console, CancellationToken cancellationToken)
     {
         // Create the list prompt
         var prompt = new ListPrompt<T>(console, this);
         var converter = Converter ?? TypeConverterHelper.ConvertToString;
-        var result = await prompt.Show(_tree, converter, Mode, true, SearchEnabled, PageSize, WrapAround, cancellationToken).ConfigureAwait(false);
+        var result = await prompt.Show(_tree, converter, Mode, true, SearchEnabled, PageSize, WrapAround, null, cancellationToken).ConfigureAwait(false);
+
+        if (result.IsCancelled && CancelResult is not null)
+        {
+            return CancelResult();
+        }
 
         if (result.IsCancelled && CancelResult is not null)
         {
@@ -242,5 +289,16 @@ public sealed class SelectionPrompt<T> : IPrompt<T>, IListPromptStrategy<T>
         }
 
         return new Rows(list);
+    }
+
+    /// <inheritdoc/>
+    int IListPromptStrategy<T>.CalculateInitialIndex(IReadOnlyList<ListPromptItem<T>> nodes)
+    {
+        if (DefaultValue is not null)
+        {
+            return _tree.IndexOf(DefaultValue) ?? 0;
+        }
+
+        return 0;
     }
 }

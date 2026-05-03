@@ -20,6 +20,7 @@ internal sealed class ListPrompt<T>
         bool searchEnabled,
         int requestedPageSize,
         bool wrapAround,
+        Func<IRenderable, IRenderable>? wrapper,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(tree);
@@ -44,8 +45,20 @@ internal sealed class ListPrompt<T>
             throw new InvalidOperationException("Cannot show an empty selection prompt. Please call the AddChoice() method to configure the prompt.");
         }
 
-        var state = new ListPromptState<T>(nodes, converter, _strategy.CalculatePageSize(_console, nodes.Count, requestedPageSize), wrapAround, selectionMode, skipUnselectableItems, searchEnabled);
-        var hook = new ListPromptRenderHook<T>(_console, () => BuildRenderable(state));
+        var state = new ListPromptState<T>(
+            nodes,
+            converter,
+            _strategy.CalculatePageSize(_console, nodes.Count, requestedPageSize),
+            wrapAround,
+            selectionMode,
+            skipUnselectableItems,
+            searchEnabled,
+            _strategy.CalculateInitialIndex(nodes));
+        var hook = new ListPromptRenderHook<T>(_console, () =>
+        {
+            var renderable = BuildRenderable(state);
+            return wrapper?.Invoke(renderable) ?? renderable;
+        });
 
         using (new RenderHookScope(_console, hook))
         {
