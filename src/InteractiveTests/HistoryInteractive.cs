@@ -29,12 +29,10 @@ public static class HistoryInteractive
         var motdepasse = AnsiConsole.Prompt(
             new TextPrompt<string>("Quel est ton mot de passe?")
                 .Secret()
-                .mask('*')
-                .placeholder("[grey][[mot de passe (Il ne sera pas dans la liste d'historique)]][/]")
                 .History(history));
 
         // Fourth prompt
-        var city = new TextPrompt<string>()
+        var city = new TextPrompt<string>("Dans quelle ville vis-tu?")
                 .DefaultValue("Drummondville")
                 .ShowDefaultValue(true)
                 .EditableDefaultValue(true)

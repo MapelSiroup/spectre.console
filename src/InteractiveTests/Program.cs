@@ -1,6 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 
 namespace InteractiveTests;
 
@@ -22,55 +23,69 @@ public static class Program
             return;
         }
 
-        WriteDivider("Fonctionnalité 1 : Mode basique (comme l'original - rétrocompatible)");  //<-- 1ere Issue
+        WriteDivider("Fonctionnalité 1: TextPrompt dans un Layout structuré");
+        AnsiConsole.MarkupLine("[dim]Ceci démontre un TextPrompt rendu à l'intérieur d'un Layout avec panneaux personnalisés.[/]");
+        AnsiConsole.WriteLine();
+        var name = await AskNameInLayout();
+        AnsiConsole.MarkupLine($"[green]Nom saisi :[/] {name}");
+
+        WriteDivider("Fonctionnalité 2: SelectionPrompt dans un Layout avec couleurs");
+        AnsiConsole.MarkupLine("[dim]Ceci démontre un SelectionPrompt rendu dans un Layout avec panneaux colorés.[/]");
+        AnsiConsole.WriteLine();
+        var animal = await AskAnimalInLayout();
+        AnsiConsole.MarkupLine($"[green]Animal sélectionné :[/] {animal}");
+
+        WriteDivider("Fonctionnalité 3: Historique des choix de Prompt précedents");
+        AnsiConsole.MarkupLine("[dim]Ceci démontre la navigation dans l'historique des entrées utilisateurs avec les flèches haut/bas.[/]");
+        AnsiConsole.WriteLine();
+        HistoryInteractive.Run();
+
+        WriteDivider("Fonctionnalité 4: (Renderable) TextPrompt en rendu asynchrone avec Layout");
+        AnsiConsole.MarkupLine("[dim]Ceci démontre le nouveau mode TextPrompt.ShowAsRenderableAsync() dans un Layout.[/]");
+        AnsiConsole.WriteLine();
+        var day = await AskDayAsRenderableInLayout();
+        AnsiConsole.MarkupLine($"[green]Jour sélectionné :[/] {day}");
+
+        WriteDivider("Fonctionnalité 5: (Renderable) SelectionPrompt en rendu asynchrone avec Layout");
+        AnsiConsole.MarkupLine("[dim]Ceci démontre un SelectionPrompt rendu à l'intérieur d'un Layout.[/]");
+        AnsiConsole.WriteLine();
+        var fruit = await AskSelectionAsRenderableInLayout();
+        AnsiConsole.MarkupLine($"[green]Fruit sélectionné :[/] {fruit}");
+
+        WriteDivider("Fonctionnalité 6: (Renderable) Multi-Selection Prompt en rendu asynchrone avec Layout");
+        AnsiConsole.MarkupLine("[dim]Ceci démontre un MultiSelectionPrompt rendu à l'intérieur d'un Layout.[/]");
+        AnsiConsole.WriteLine();
+        var colors = await AskMultiSelectionAsRenderableInLayout();
+        AnsiConsole.MarkupLine($"[green]Sélection des couleurs:[/] {string.Join(", ", colors)}");
+        
+        WriteDivider("Fonctionnalité 7: Mode basique (comme l'original - rétrocompatible)");
         AnsiConsole.MarkupLine("[dim]Ceci démontre le comportement original de Show() avec la fonctionnalité [cyan]DefaultInput[/].[/]");
         AnsiConsole.WriteLine();
         var sport = AskSport();
         AnsiConsole.MarkupLine($"[green]Sport sélectionné :[/] {sport}");
-
-        WriteDivider("Fonctionnalité 2: (Renderable) TextPrompt en rendu asynchrone avec hook");
-        AnsiConsole.MarkupLine("[dim]Ceci démontre le nouveau mode TextPrompt.ShowAsRenderableAsync().[/]");
+        
+        WriteDivider("Fonctionnalité 8: (Renderable) Confirmation Prompt avec Layout");
+        AnsiConsole.MarkupLine("[dim]Ceci démontre un ConfirmationPrompt rendu à l'intérieur d'un Layout.[/]");        
         AnsiConsole.WriteLine();
-        var day = await AskDayAsRenderable();
-        AnsiConsole.MarkupLine($"[green]Jour sélectionné :[/] {day}");
-
-        WriteDivider("Fonctionnalité 3: (Renderable) SelectionPrompt en rendu asynchrone");
-        AnsiConsole.MarkupLine("[dim]Ceci démontre un SelectionPrompt rendu à l'intérieur d'un panneau.[/]");
-        AnsiConsole.WriteLine();
-        var fruit = await AskSelectionAsRenderable();
-        AnsiConsole.MarkupLine($"[green]Fruit sélectionné :[/] {fruit}");
-
-        WriteDivider("Fonctionnalité 4: (Renderable) Multi-Selection Prompt en rendu asynchrone");
-        AnsiConsole.MarkupLine("[dim]Ceci démontre un MultiSelectionPrompt rendu à l'intérieur d'un panneau.[/]");
-        AnsiConsole.WriteLine();
-        var colors = await AskMultiSelectionAsRenderable();
-        AnsiConsole.MarkupLine($"[green]Sélection des couleurs:[/] {string.Join(", ", colors)}");
-
-        WriteDivider("Fonctionnalité 5: (Renderable) Confirmation Prompt");
-        AnsiConsole.MarkupLine("[dim]Ceci démontre un ConfirmationPrompt rendu à l'intérieur d'un panneau.[/]");
-        AnsiConsole.WriteLine();
-        var confirmed = await AskConfirmAsRenderable();
-        AnsiConsole.MarkupLine($"[green]Confirmed:[/] {confirmed}");
+        var confirmed = await AskConfirmAsRenderableInLayout();
 
         
-        WriteDivider("Fonctionnalité 6: (PromptHistory) Historique des choix de Prompt précedents");
-        AnsiConsole.MarkupLine("[dim]Ceci démontre la navigation dans l'historique des entrées utilisateurs avec les flèches haut/bas.[/]");
-        AnsiConsole.WriteLine();
-        HistoryInteractive.Run();
 
         WriteDivider("Résumé des résultats");
         AnsiConsole.Write(new Table()
             .AddColumns("[grey]Fonctionnalité[/]", "[grey]Résultat[/]")
             .RoundedBorder()
             .BorderColor(Color.Grey)
-            .AddRow(new Markup("[cyan]Mode bloquant (Fonctionnalité 1)[/]\n[green]Sport préféré[/]"), new Markup("sport"))
-            .AddRow(new Markup("[cyan]Mode rendu (Fonctionnalité 2)[/]\n[green]Jour préféré[/]"), new Markup("day"))
-            .AddRow(new Markup("[cyan]Sélection rendue (Fonctionnalité 3)[/]\n[green]Fruit sélectionné[/]"), new Markup("fruit"))
-            .AddRow(new Markup("[cyan]Sélection multiple (Fonctionnalité 4)[/]\n[green]Couleurs sélectionnées[/]"), new Markup(string.Join(", ", "colors")))
-            .AddRow(new Markup("[cyan]Confirmation rendue (Fonctionnalité 5)[/]\n[green]Confirmé[/]"), new Markup("confirmed.ToString()")));
+            .AddRow(new Markup("[cyan]TextPrompt dans Layout (Fonctionnalité 1)[/]\n[green]Nom saisi[/]"), new Markup(name))
+            .AddRow(new Markup("[cyan]SelectionPrompt dans Layout (Fonctionnalité 2)[/]\n[green]Animal sélectionné[/]"), new Markup(animal))
+            .AddRow(new Markup("[cyan]Historique (Fonctionnalité 3)[/]\n[green]Navigation[/]"), new Markup("Démontré"))
+            .AddRow(new Markup("[cyan]TextPrompt rendu Layout (Fonctionnalité 4)[/]\n[green]Jour préféré[/]"), new Markup(day))
+            .AddRow(new Markup("[cyan]Sélection rendue Layout (Fonctionnalité 5)[/]\n[green]Fruit sélectionné[/]"), new Markup(fruit))
+            .AddRow(new Markup("[cyan]Sélection multiple Layout (Fonctionnalité 6)[/]\n[green]Couleurs sélectionnées[/]"), new Markup(string.Join(", ", colors)))
+            .AddRow(new Markup("[cyan]Confirmation Layout (Fonctionnalité 7)[/]\n[green]Confirmé[/]"), new Markup(confirmed.ToString()))
+            .AddRow(new Markup("[cyan]Mode bloquant (Fonctionnalité 8)[/]\n[green]Sport préféré[/]"), new Markup(sport)));
 
-
-        WriteDivider("Fonctionnalité 7: Méthodes de nettoyage/Actions de curseur avec le markup");
+        WriteDivider("Fonctionnalité 9: Méthodes de nettoyage/Actions de curseur avec le markup");
         AnsiConsole.MarkupLine("[dim]Ceci démontre comment nettoyer les lignes ou des zones avec du markup.[/]");
         AnsiConsole.WriteLine();
         await MarkupClearInteractive.Run();
@@ -115,15 +130,13 @@ public static class Program
                 .PromptStyle("cyan"));
     }
 
-    /// <summary>
-    /// Demonstrates Feature 2: Renderable IPrompt - Async renderable mode with live hook updates.
-    /// The prompt is rendered with live updates as the user types, via the render hook.
-    /// </summary>
-    public static async Task<string> AskDayAsRenderable()
+
+    public static async Task<string> AskDayAsRenderableInLayout()
     {
         var prompt = new TextPrompt<string>("Quel [green]jour[/] te convient le plus ?")
             .InvalidChoiceMessage("[red]Ce n'est pas un jour ![/]")
             .DefaultValue("Dimanche")
+            .ShowChoices(false)
             .AddChoice("Lundi")
             .AddChoice("Mardi")
             .AddChoice("Mercredi")
@@ -131,54 +144,104 @@ public static class Program
             .AddChoice("Vendredi")
             .AddChoice("Samedi")
             .AddChoice("Dimanche")
-            .ShowDefaultValue(false)
-            //.EditableDefaultValue(true)  // supporte aussi le default input en renderable mode! (Wrong branch rn tho)
+            .ShowDefaultValue(true)
             .PromptStyle("magenta");
 
-        var result = await prompt.ShowAsRenderableAsync(
-            AnsiConsole.Console,
-            new Panel(prompt)
-                .Header("Example de prompt rendue avec une bordure et Titre", Justify.Center)
-                .RoundedBorder()
-                .BorderColor(Color.Red),
-            CancellationToken.None);
-        //var result = await prompt.ShowAsRenderableAsync(AnsiConsole.Console, CancellationToken.None);
+        var infoPanel = new Panel("[bold cyan]Choisissez votre jour préféré[/]\n\nUtilisez les flèches pour naviguer et Entrée pour sélectionner.")
+            .Header("Informations", Justify.Center)
+            .BorderColor(Color.Cyan)
+            .RoundedBorder();
 
-        return result;
+        var layout = new Layout()
+            .SplitRows(
+                new Layout("Info")
+                    .Update(infoPanel)
+                    .Ratio(1),
+                new Layout("Prompt")
+                    .Update(new Panel(prompt)
+                        .Header("Sélection du jour", Justify.Left)
+                        .BorderColor(Color.Magenta)
+                        .BorderStyle(new Style().Background(Color.DarkMagenta))
+                        .RoundedBorder())
+                    .Ratio(2));
+
+        return await prompt.ShowAsRenderableAsync(
+            AnsiConsole.Console,
+            layout,
+            CancellationToken.None);
     }
 
-    public static async Task<string> AskSelectionAsRenderable()
+    public static async Task<string> AskSelectionAsRenderableInLayout()
     {
         var prompt = new SelectionPrompt<string>()
             .Title("Choisis un fruit")
             .AddChoices("Pomme", "Banane", "Cerise")
             .DefaultValue("Banane");
 
+        var infoPanel = new Panel("[bold green]Sélectionnez un fruit[/]\n\nUtilisez les flèches haut/bas pour naviguer.")
+            .Header("Guide", Justify.Center)
+            .BorderColor(Color.Green)
+            .DoubleBorder();
+
+        var layout = new Layout()
+            .SplitColumns(
+                new Layout("Info")
+                    .Update(infoPanel)
+                    .Ratio(1),
+                new Layout("Prompt")
+                    .Update(new Panel("Placeholder"))
+                    .Ratio(1));
+
+        Func<IRenderable, IRenderable> wrapper = renderable => {
+            layout["Prompt"].Update(new Panel(renderable)
+                .Header("Sélection de fruit")
+                .RoundedBorder()
+                .BorderColor(Color.Yellow));
+            return layout;
+        };
+
         return await prompt.ShowAsRenderableAsync(
             AnsiConsole.Console,
-            renderable => new Panel(renderable)
-                .Header("Sélectionne un fruit")
-                .RoundedBorder()
-                .BorderColor(Color.Green),
+            wrapper,
             CancellationToken.None);
     }
 
-    public static async Task<IReadOnlyList<string>> AskMultiSelectionAsRenderable()
+    public static async Task<IReadOnlyList<string>> AskMultiSelectionAsRenderableInLayout()
     {
         var prompt = new MultiSelectionPrompt<string>()
             .Title("Choisis les couleurs")
             .AddChoices("Rouge", "Vert", "Bleu", "Jaune", "Cyan", "Magenta");
 
-        return await prompt.ShowAsRenderableAsync(
-            AnsiConsole.Console,
-            renderable => new Panel(renderable)
+        var infoPanel = new Panel("[bold red]Sélection multiple[/]\n\nUtilisez Espace pour sélectionner/désélectionner, Entrée pour confirmer.")
+            .Header("Instructions", Justify.Center)
+            .BorderColor(Color.Red)
+            .BorderStyle(new Style().Background(Color.DarkRed))
+            .RoundedBorder();
+
+        var layout = new Layout()
+            .SplitRows(
+                new Layout("Info")
+                    .Update(infoPanel)
+                    .Ratio(1),
+                new Layout("Prompt")
+                    .Update(new Panel("Placeholder"))
+                    .Ratio(2));
+
+        Func<IRenderable, IRenderable> wrapper = renderable => {
+            layout["Prompt"].Update(new Panel(renderable)
                 .Header("Sélection multiple de couleurs")
                 .RoundedBorder()
-                .BorderColor(Color.Blue),
+                .BorderColor(Color.Blue));
+            return layout;
+        };
+
+        return await prompt.ShowAsRenderableAsync(
+            AnsiConsole.Console,
+            wrapper,
             CancellationToken.None);
     }
 
-    public static async Task<bool> AskConfirmAsRenderable()
+    public static async Task<bool> AskConfirmAsRenderableInLayout()
     {
         var prompt = new ConfirmationPrompt("Veux-tu continuer ?")
             .ShowChoices(true)
@@ -188,6 +251,78 @@ public static class Program
 
         return await prompt.ShowAsRenderableAsync(
             AnsiConsole.Console,
+            new Panel("[bold yellow]Confirmation[/]\n\nConfirmer la remise de résultats ? [cyan](Y/n)[/]")
+                .Header("Réponse requise", Justify.Center)
+                .BorderColor(Color.Yellow)
+                .RoundedBorder(),
+            CancellationToken.None);
+    }
+
+    public static async Task<string> AskNameInLayout()
+    {
+        var prompt = new TextPrompt<string>("Quel est votre [green]nom[/] ?")
+            .PromptStyle("yellow");
+
+        // Create a layout with header and prompt sections
+        var headerPanel = new Panel("[bold blue]Bienvenue dans l'application interactive[/]")
+            .Header("Titre de l'application", Justify.Center)
+            .BorderColor(Color.Blue)
+            .RoundedBorder();
+
+        var layout = new Layout()
+            .SplitRows(
+                new Layout("Header")
+                    .Update(headerPanel)
+                    .Ratio(1),
+                new Layout("Prompt")
+                    .Update(new Panel(prompt)
+                        .Header("Saisie du nom", Justify.Left)
+                        .BorderColor(Color.Yellow)
+                        .BorderStyle(new Style().Background(Color.Gray11))
+                        .RoundedBorder())
+                    .Ratio(2));
+
+        return await prompt.ShowAsRenderableAsync(
+            AnsiConsole.Console,
+            layout,
+            CancellationToken.None);
+    }
+
+    public static async Task<string> AskAnimalInLayout()
+    {
+        var prompt = new SelectionPrompt<string>()
+            .Title("Choisissez un animal")
+            .AddChoices("Chat", "Chien", "Oiseau", "Poisson", "Lapin")
+            .DefaultValue("Chat");
+
+        // Create a colorful layout
+        var leftPanel = new Panel("[bold green]Section gauche[/]\n\nCeci est un exemple de layout avec des panneaux colorés.")
+            .Header("Informations", Justify.Center)
+            .BorderColor(Color.Green)
+            .BorderStyle(new Style().Background(Color.DarkGreen))
+            .DoubleBorder();
+
+        var layout = new Layout()
+            .SplitColumns(
+                new Layout("Left")
+                    .Update(leftPanel)
+                    .Ratio(1),
+                new Layout("Right")
+                    .Update(new Panel("Placeholder"))
+                    .Ratio(1));
+
+        Func<IRenderable, IRenderable> wrapper = renderable => {
+            layout["Right"].Update(new Panel(renderable)
+                .Header("Sélection d'animal", Justify.Left)
+                .BorderColor(Color.Magenta)
+                .BorderStyle(new Style().Background(Color.DarkMagenta))
+                .RoundedBorder());
+            return layout;
+        };
+
+        return await prompt.ShowAsRenderableAsync(
+            AnsiConsole.Console,
+            wrapper,
             CancellationToken.None);
     }
 }

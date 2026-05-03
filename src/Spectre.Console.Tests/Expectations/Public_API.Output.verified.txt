@@ -377,12 +377,15 @@
         public System.StringComparer Comparer { get; set; }
         public bool DefaultValue { get; set; }
         public Spectre.Console.Style? DefaultValueStyle { get; set; }
+        public Spectre.Console.PromptHistory? History { get; set; }
         public string InvalidChoiceMessage { get; set; }
         public char No { get; set; }
         public bool ShowChoices { get; set; }
         public bool ShowDefaultValue { get; set; }
         public char Yes { get; set; }
         public bool Show(Spectre.Console.IAnsiConsole console) { }
+        public System.Threading.Tasks.Task<bool> ShowAsRenderableAsync(Spectre.Console.IAnsiConsole console, System.Threading.CancellationToken cancellationToken) { }
+        public System.Threading.Tasks.Task<bool> ShowAsRenderableAsync(Spectre.Console.IAnsiConsole console, Spectre.Console.Rendering.IRenderable? wrapper, System.Threading.CancellationToken cancellationToken) { }
         public System.Threading.Tasks.Task<bool> ShowAsync(Spectre.Console.IAnsiConsole console, System.Threading.CancellationToken cancellationToken) { }
     }
     public static class ConfirmationPromptExtensions
@@ -391,6 +394,7 @@
         public static Spectre.Console.ConfirmationPrompt DefaultValueStyle(this Spectre.Console.ConfirmationPrompt obj, Spectre.Console.Style? style) { }
         public static Spectre.Console.ConfirmationPrompt HideChoices(this Spectre.Console.ConfirmationPrompt obj) { }
         public static Spectre.Console.ConfirmationPrompt HideDefaultValue(this Spectre.Console.ConfirmationPrompt obj) { }
+        public static Spectre.Console.ConfirmationPrompt History(this Spectre.Console.ConfirmationPrompt obj, Spectre.Console.PromptHistory? history) { }
         public static Spectre.Console.ConfirmationPrompt InvalidChoiceMessage(this Spectre.Console.ConfirmationPrompt obj, string message) { }
         public static Spectre.Console.ConfirmationPrompt No(this Spectre.Console.ConfirmationPrompt obj, char character) { }
         public static Spectre.Console.ConfirmationPrompt ShowChoices(this Spectre.Console.ConfirmationPrompt obj) { }
@@ -2384,6 +2388,8 @@
         public T? GetParent(T item) { }
         public System.Collections.Generic.IEnumerable<T> GetParents(T item) { }
         public System.Collections.Generic.List<T> Show(Spectre.Console.IAnsiConsole console) { }
+        public System.Threading.Tasks.Task<System.Collections.Generic.List<T>> ShowAsRenderableAsync(Spectre.Console.IAnsiConsole console, System.Threading.CancellationToken cancellationToken) { }
+        public System.Threading.Tasks.Task<System.Collections.Generic.List<T>> ShowAsRenderableAsync(Spectre.Console.IAnsiConsole console, System.Func<Spectre.Console.Rendering.IRenderable, Spectre.Console.Rendering.IRenderable>? wrapper, System.Threading.CancellationToken cancellationToken) { }
         public System.Threading.Tasks.Task<System.Collections.Generic.List<T>> ShowAsync(Spectre.Console.IAnsiConsole console, System.Threading.CancellationToken cancellationToken) { }
     }
     public enum Overflow
@@ -2493,6 +2499,7 @@
         public int Lines { get; }
         public Spectre.Console.Overflow? Overflow { get; set; }
         public Spectre.Console.Paragraph Append(string text, Spectre.Console.Style? style = default, Spectre.Console.Link? link = null) { }
+        public Spectre.Console.Paragraph AppendControl(string control) { }
         protected override Spectre.Console.Rendering.Measurement Measure(Spectre.Console.Rendering.RenderOptions options, int maxWidth) { }
         protected override System.Collections.Generic.IEnumerable<Spectre.Console.Rendering.Segment> Render(Spectre.Console.Rendering.RenderOptions options, int maxWidth) { }
     }
@@ -2637,6 +2644,17 @@
         public T Update<T>(string key, System.Func<T, T> func)
             where T :  struct { }
     }
+    public sealed class PromptHistory
+    {
+        public PromptHistory(int capacity = 32) { }
+        public bool Enabled { get; set; }
+        public System.Collections.Generic.IReadOnlyList<string> Entries { get; }
+        public bool IgnoreSecret { get; set; }
+        public static Spectre.Console.PromptHistory Default { get; }
+        public event System.EventHandler<string>? EntryAdded;
+        public void Add(string entry) { }
+        public void Clear() { }
+    }
     public class Recorder : Spectre.Console.IAnsiConsole, System.IDisposable
     {
         public Recorder(Spectre.Console.IAnsiConsole console) { }
@@ -2761,6 +2779,8 @@
         public bool WrapAround { get; set; }
         public Spectre.Console.ISelectionItem<T> AddChoice(T item) { }
         public T Show(Spectre.Console.IAnsiConsole console) { }
+        public System.Threading.Tasks.Task<T> ShowAsRenderableAsync(Spectre.Console.IAnsiConsole console, System.Threading.CancellationToken cancellationToken) { }
+        public System.Threading.Tasks.Task<T> ShowAsRenderableAsync(Spectre.Console.IAnsiConsole console, System.Func<Spectre.Console.Rendering.IRenderable, Spectre.Console.Rendering.IRenderable>? wrapper, System.Threading.CancellationToken cancellationToken) { }
         public System.Threading.Tasks.Task<T> ShowAsync(Spectre.Console.IAnsiConsole console, System.Threading.CancellationToken cancellationToken) { }
     }
     [System.Diagnostics.DebuggerDisplay("{Width,nq}x{Height,nq}")]
@@ -3118,9 +3138,11 @@
         public static Spectre.Console.TextPrompt<T> ClearOnFinish<T>(this Spectre.Console.TextPrompt<T> obj, bool clear = true) { }
         public static Spectre.Console.TextPrompt<T> DefaultValue<T>(this Spectre.Console.TextPrompt<T> obj, T value) { }
         public static Spectre.Console.TextPrompt<T> DefaultValueStyle<T>(this Spectre.Console.TextPrompt<T> obj, Spectre.Console.Style? style) { }
+        public static Spectre.Console.TextPrompt<T> DisableHistory<T>(this Spectre.Console.TextPrompt<T> obj) { }
         public static Spectre.Console.TextPrompt<T> EditableDefaultValue<T>(this Spectre.Console.TextPrompt<T> obj, bool state) { }
         public static Spectre.Console.TextPrompt<T> HideChoices<T>(this Spectre.Console.TextPrompt<T> obj) { }
         public static Spectre.Console.TextPrompt<T> HideDefaultValue<T>(this Spectre.Console.TextPrompt<T> obj) { }
+        public static Spectre.Console.TextPrompt<T> History<T>(this Spectre.Console.TextPrompt<T> obj, Spectre.Console.PromptHistory? history) { }
         public static Spectre.Console.TextPrompt<T> InvalidChoiceMessage<T>(this Spectre.Console.TextPrompt<T> obj, string message) { }
         public static Spectre.Console.TextPrompt<T> PromptStyle<T>(this Spectre.Console.TextPrompt<T> obj, Spectre.Console.Style style) { }
         public static Spectre.Console.TextPrompt<T> Secret<T>(this Spectre.Console.TextPrompt<T> obj) { }
@@ -3134,7 +3156,7 @@
         public static Spectre.Console.TextPrompt<T> ValidationErrorMessage<T>(this Spectre.Console.TextPrompt<T> obj, string message) { }
         public static Spectre.Console.TextPrompt<T> WithConverter<T>(this Spectre.Console.TextPrompt<T> obj, System.Func<T, string>? displaySelector) { }
     }
-    public sealed class TextPrompt<T> : Spectre.Console.IHasCulture, Spectre.Console.IPrompt<T>
+    public sealed class TextPrompt<T> : Spectre.Console.IHasCulture, Spectre.Console.IPrompt<T>, Spectre.Console.Rendering.IRenderable
     {
         public TextPrompt(string prompt, System.StringComparer? comparer = null) { }
         public bool AllowEmpty { get; set; }
@@ -3145,6 +3167,7 @@
         public System.Globalization.CultureInfo? Culture { get; set; }
         public Spectre.Console.Style? DefaultValueStyle { get; set; }
         public bool EditableDefaultValue { get; set; }
+        public Spectre.Console.PromptHistory? History { get; set; }
         public string InvalidChoiceMessage { get; set; }
         public bool IsSecret { get; set; }
         public char? Mask { get; set; }
@@ -3153,7 +3176,11 @@
         public bool ShowDefaultValue { get; set; }
         public string ValidationErrorMessage { get; set; }
         public System.Func<T, Spectre.Console.ValidationResult>? Validator { get; set; }
+        public Spectre.Console.Rendering.Measurement Measure(Spectre.Console.Rendering.RenderOptions options, int maxWidth) { }
+        public System.Collections.Generic.IEnumerable<Spectre.Console.Rendering.Segment> Render(Spectre.Console.Rendering.RenderOptions options, int maxWidth) { }
         public T Show(Spectre.Console.IAnsiConsole console) { }
+        public System.Threading.Tasks.Task<T> ShowAsRenderableAsync(Spectre.Console.IAnsiConsole console, System.Threading.CancellationToken cancellationToken) { }
+        public System.Threading.Tasks.Task<T> ShowAsRenderableAsync(Spectre.Console.IAnsiConsole console, Spectre.Console.Rendering.IRenderable? wrapper, System.Threading.CancellationToken cancellationToken) { }
         public System.Threading.Tasks.Task<T> ShowAsync(Spectre.Console.IAnsiConsole console, System.Threading.CancellationToken cancellationToken) { }
     }
     public sealed class TransferSpeedColumn : Spectre.Console.ProgressColumn
