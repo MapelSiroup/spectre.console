@@ -50,6 +50,11 @@ public sealed class ConfirmationPrompt : IPrompt<bool>
     public Style? ChoicesStyle { get; set; }
 
     /// <summary>
+    /// Gets or sets the prompt history.
+    /// </summary>
+    public PromptHistory? History { get; set; } = PromptHistory.Default;
+
+    /// <summary>
     /// Gets or sets the string comparer to use when comparing user input
     /// against Yes/No choices.
     /// </summary>
@@ -124,6 +129,7 @@ public sealed class ConfirmationPrompt : IPrompt<bool>
             .ShowDefaultValue(ShowDefaultValue)
             .DefaultValue(DefaultValue ? Yes : No)
             .DefaultValueStyle(DefaultValueStyle)
+            .History(History)
             .AddChoice(Yes)
             .AddChoice(No);
 
@@ -273,6 +279,20 @@ public static class ConfirmationPromptExtensions
         ArgumentNullException.ThrowIfNull(obj);
 
         obj.No = character;
+        return obj;
+    }
+
+    /// <summary>
+    /// Uses the provided prompt history for this prompt.
+    /// </summary>
+    /// <param name="obj">The prompt.</param>
+    /// <param name="history">The prompt history instance.</param>
+    /// <returns>The same instance so that multiple calls can be chained.</returns>
+    public static ConfirmationPrompt History(this ConfirmationPrompt obj, PromptHistory? history)
+    {
+        ArgumentNullException.ThrowIfNull(obj);
+
+        obj.History = history;
         return obj;
     }
 }

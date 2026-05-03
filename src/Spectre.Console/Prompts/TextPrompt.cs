@@ -35,6 +35,11 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
     public string InvalidChoiceMessage { get; set; } = "[red]Please select one of the available options[/]";
 
     /// <summary>
+    /// Gets or sets the prompt history.
+    /// </summary>
+    public PromptHistory? History { get; set; } = PromptHistory.Default;
+
+    /// <summary>
     /// Gets or sets a value indicating whether input should
     /// be hidden in the console.
     /// </summary>
@@ -229,16 +234,31 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
 
             WritePrompt(console);
 
+            void AddToHistory(string entry)
+            {
+                if (string.IsNullOrEmpty(entry))
+                {
+                    return;
+                }
+
+                if (History?.Enabled != true || (IsSecret && History.IgnoreSecret))
+                {
+                    return;
+                }
+
+                History.Add(entry);
+            }
+
             while (true)
             {
                 string input;
                 if (EditableDefaultValue && DefaultValue != null)
                 {
-                    input = await console.ReadLine(promptStyle, IsSecret, Mask, choices, cancellationToken, converter(DefaultValue.Value)).ConfigureAwait(false);
+                    input = await console.ReadLine(promptStyle, IsSecret, Mask, choices, cancellationToken, converter(DefaultValue.Value), History).ConfigureAwait(false);
                 }
                 else
                 {
-                    input = await console.ReadLine(promptStyle, IsSecret, Mask, choices, cancellationToken).ConfigureAwait(false);
+                    input = await console.ReadLine(promptStyle, IsSecret, Mask, choices, cancellationToken, history: History).ConfigureAwait(false);
                 }
 
 
@@ -252,6 +272,7 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
                         console.Write(IsSecret ? defaultValue.Mask(Mask) : defaultValue, promptStyle);
                         console.WriteLine();
 
+                        AddToHistory(defaultValue);
                         ClearPromptLine(console);
                         return DefaultValue.Value;
                     }
@@ -269,6 +290,7 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
                 {
                     if (choiceMap.TryGetValue(input, out result) && result != null)
                     {
+                        AddToHistory(input);
                         ClearPromptLine(console);
                         return result;
                     }
@@ -294,6 +316,7 @@ public sealed class TextPrompt<T> : IPrompt<T>, IRenderable, IHasCulture
                     continue;
                 }
 
+                AddToHistory(input);
                 ClearPromptLine(console);
                 return result;
             }

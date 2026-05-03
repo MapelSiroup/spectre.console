@@ -2,7 +2,7 @@ namespace Spectre.Console;
 
 internal sealed class AnsiConsoleFacade : IAnsiConsole
 {
-    private readonly Lock _renderLock;
+    private readonly object _renderLock;
     private readonly AnsiConsoleBackend _ansiBackend;
     private readonly LegacyConsoleBackend _legacyBackend;
 

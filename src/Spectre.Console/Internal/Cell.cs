@@ -23,9 +23,7 @@ internal static class Cell
 #endif
     }
 
-    public static int GetCellLength(string text) => GetCellLength(text.AsSpan());
-
-    public static int GetCellLength(ReadOnlySpan<char> text)
+    public static int GetCellLength(string text)
     {
 #if !NETSTANDARD2_0
         return UnicodeCalculator.GetWidth(text);
