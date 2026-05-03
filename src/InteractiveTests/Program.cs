@@ -67,7 +67,7 @@ public static class Program
             .AddRow(new Markup("[cyan]Mode rendu (Fonctionnalité 2)[/]\n[green]Jour préféré[/]"), new Markup("day"))
             .AddRow(new Markup("[cyan]Sélection rendue (Fonctionnalité 3)[/]\n[green]Fruit sélectionné[/]"), new Markup("fruit"))
             .AddRow(new Markup("[cyan]Sélection multiple (Fonctionnalité 4)[/]\n[green]Couleurs sélectionnées[/]"), new Markup(string.Join(", ", "colors")))
-            .AddRow(new Markup("[cyan]Confirmation rendue (Fonctionnalité 5)[/]\n[green]Confirmé[/]"), new Markup("confirmed.ToString()"));
+            .AddRow(new Markup("[cyan]Confirmation rendue (Fonctionnalité 5)[/]\n[green]Confirmé[/]"), new Markup("confirmed.ToString()")));
 
 
         WriteDivider("Fonctionnalité 7: Méthodes de nettoyage/Actions de curseur avec le markup");
