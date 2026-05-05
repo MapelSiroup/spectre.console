@@ -65,10 +65,8 @@ internal sealed class LiveRenderable : Renderable
                 w.Write("\r"); // More efficient than CHA (CSI 1 G)?
                 if (linesToMoveUp > 0)
                 {
-                    w.EraseInLine(2);
                     w.CursorUp(linesToMoveUp);
                 }
-                w.EraseInLine(2);
             });
         }
     }
@@ -82,12 +80,13 @@ internal sealed class LiveRenderable : Renderable
                 return ControlCode.Empty;
             }
 
-            var linesToClear = _shape.Value.Height;
+            var linesToClear = _shape.Value.Height - 1;
             return ControlCode.Create(_console.Profile.Capabilities, w =>
             {
                 w.Write("\r"); // More efficient than CHA (CSI 1 G)?
                 w.EraseInLine(2);
-                for (var i = 1; i < linesToClear; i++)
+
+                for (var count = 0; count < linesToClear; count++)
                 {
                     w.CursorUp(1);
                     w.EraseInLine(2);
@@ -155,7 +154,7 @@ internal sealed class LiveRenderable : Renderable
                     DidOverflow = true;
                 }
 
-                _shape = shape;
+                _shape = _shape?.Inflate(shape) ?? shape;
                 _shape.Value.Apply(options, ref lines);
 
                 foreach (var (_, _, last, line) in lines.Enumerate())
